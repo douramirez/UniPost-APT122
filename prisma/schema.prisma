@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          Int           @id @default(autoincrement())
+  name        String?
+  email       String        @unique
+  memberships Membership[]
+  posts       Post[]        @relation("UserPosts")
+}
+
+model Organization {
+  id          Int           @id @default(autoincrement())
+  name        String        @unique
+  plan        String
+  memberships Membership[]
+  posts       Post[]
+}
+
+model Membership {
+  id              Int           @id @default(autoincrement())
+  userId          Int
+  organizationId  Int
+  role            String
+  user            User          @relation(fields: [userId], references: [id])
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  @@unique([userId, organizationId])
+}
+
+model Post {
+  id              Int           @id @default(autoincrement())
+  organizationId  Int
+  authorId        Int
+  title           String
+  body            String
+  status          String
+  createdAt       DateTime      @default(now())
+  variants        Variant[]
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  author          User          @relation("UserPosts", fields: [authorId], references: [id])
+  schedule        Schedule?
+}
+
+model Variant {
+  id        Int    @id @default(autoincrement())
+  postId    Int
+  network   String
+  text      String
+  status    String
+  media     Json?   
+  post      Post   @relation(fields: [postId], references: [id])
+}
+
+model Schedule {
+  id        Int      @id @default(autoincrement())
+  postId    Int      @unique
+  runAt     DateTime
+  timezone  String
+  post      Post     @relation(fields: [postId], references: [id])
+}
