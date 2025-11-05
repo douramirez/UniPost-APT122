@@ -1,5 +1,5 @@
 import "./globals.css";
-import { Toaster } from "react-hot-toast";
+import { Providers } from "./providers";
 
 export const metadata = {
   title: "UniPost",
@@ -9,9 +9,8 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className="bg-gray-50 text-gray-900">
-        {children}
-        <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} />
+      <body>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

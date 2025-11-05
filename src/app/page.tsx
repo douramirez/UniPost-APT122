@@ -9,13 +9,29 @@ export default function HomePage() {
           </div>
           <span className="text-lg font-semibold tracking-wide">UniPost</span>
         </div>
-        <nav className="hidden items-center gap-6 text-sm/none md:flex">
-          <a href="#features" className="opacity-90 transition hover:opacity-100">Características</a>
-          <a href="#benefits" className="opacity-90 transition hover:opacity-100">Beneficios</a>
-          <a href="#pricing" className="opacity-90 transition hover:opacity-100">Precios</a>
-          <a href="#contact" className="opacity-90 transition hover:opacity-100">Contacto</a>
-          <a href="/composer" className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg">Probar demo</a>
-        </nav>
+        <nav className="hidden items-center gap-6 text-sm md:flex">
+  <a href="#features" className="opacity-90 transition hover:opacity-100">Características</a>
+  <a href="#benefits" className="opacity-90 transition hover:opacity-100">Beneficios</a>
+  <a href="#pricing" className="opacity-90 transition hover:opacity-100">Precios</a>
+  <a href="#contact" className="opacity-90 transition hover:opacity-100">Contacto</a>
+
+  {/* Botones de autenticación */}
+  <div className="flex items-center gap-3">
+    <a
+      href="/login"
+      className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-white backdrop-blur-sm hover:bg-white/10 transition"
+    >
+      Iniciar sesión
+    </a>
+    <a
+      href="/register"
+      className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg transition"
+    >
+      Registrarse
+    </a>
+  </div>
+</nav>
+
       </header>
 
       {/* Hero */}

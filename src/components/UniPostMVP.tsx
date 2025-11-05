@@ -1,6 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
+import { signOut } from "next-auth/react";
+
 
 type Variant = {
   id: number;
@@ -18,11 +21,14 @@ type Post = {
 };
 
 export default function ComposerPage() {
+  const { data: session, status } = useSession();
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [variants, setVariants] = useState([
     { network: "INSTAGRAM", text: "" },
+    { network: "X", text: "" },
     { network: "FACEBOOK", text: "" },
   ]);
   const [loading, setLoading] = useState(false);
@@ -87,6 +93,32 @@ export default function ComposerPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white py-10 px-6">
       <div className="max-w-5xl mx-auto">
+        {session && (
+          <p className="text-center text-lg text-white mb-4">
+            👋 Hola, <span className="font-semibold">{session.user?.name || session.user?.email}</span>
+          </p>
+          
+        )}
+
+        {session && (
+  <div className="flex justify-center mb-6">
+    <button
+      onClick={() => signOut({ callbackUrl: "/" })}
+      className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition"
+    >
+      Cerrar sesión
+    </button>
+  </div>
+  
+)}
+
+<a
+  href="/perfil"
+  className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition"
+>
+  Ver perfil
+</a>
+
         <h1 className="text-4xl font-bold mb-10 text-center tracking-tight">
           UniPost <span className="text-purple-200">– Composer</span>
         </h1>
@@ -122,7 +154,7 @@ export default function ComposerPage() {
                   <option>INSTAGRAM</option>
                   <option>FACEBOOK</option>
                   <option>X</option>
-                  <option>LINKEDIN</option>
+                  
                 </select>
                 <input
                   value={v.text}
