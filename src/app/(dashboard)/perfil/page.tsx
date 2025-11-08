@@ -1,63 +1,57 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
 
 export default function PerfilPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-
-  // Mientras se verifica la sesión
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white">
-        <p>Verificando sesión...</p>
-      </div>
-    );
-  }
-
-  // Si no hay sesión activa
-  if (!session) {
-    router.push("/login");
-    return null;
-  }
-
-  const user = session.user;
+  const { data: session } = useSession();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white py-10 px-6">
-      <div className="max-w-lg mx-auto backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl shadow-lg p-8 text-center">
-        <h1 className="text-3xl font-bold mb-6">👤 Mi Perfil</h1>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-600 text-white p-10">
+      <div className="max-w-5xl mx-auto text-center">
+        {session ? (
+          <>
+            {/* Avatar */}
+            <img
+              src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+              alt="avatar"
+              className="mx-auto w-28 h-28 rounded-full border-4 border-white/30 shadow-lg mb-4"
+            />
 
-        <div className="space-y-4">
-          <div className="bg-white/10 rounded-xl p-4 text-left border border-white/20">
-            <p className="text-sm text-gray-300">Nombre:</p>
-            <p className="text-lg font-semibold">
-              {user?.name || "No especificado"}
+            {/* Nombre y datos */}
+            <h1 className="text-3xl font-bold mb-1">
+              👋 {session.user?.name || session.user?.email}
+            </h1>
+            <p className="text-white/70 mb-6">
+              Community Manager | UniPost
             </p>
-          </div>
 
-          <div className="bg-white/10 rounded-xl p-4 text-left border border-white/20">
-            <p className="text-sm text-gray-300">Correo:</p>
-            <p className="text-lg font-semibold">
-              {user?.email || "No disponible"}
-            </p>
-          </div>
-
-          <div className="bg-white/10 rounded-xl p-4 text-left border border-white/20">
-            <p className="text-sm text-gray-300">Estado de sesión:</p>
-            <p className="text-lg font-semibold text-green-300">Activa</p>
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <button
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="bg-white/20 px-6 py-2 rounded-lg hover:bg-white/30 transition text-white font-semibold"
-          >
-            Cerrar sesión
-          </button>
-        </div>
+            {/* Botones */}
+            <div className="flex flex-wrap justify-center gap-4">
+              <a
+                href="/composer"
+                className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition"
+              >
+                ✏️ Ir al Composer
+              </a>
+              <a
+                href="/metricas"
+                className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition"
+              >
+                📊 Ver métricas
+              </a>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition"
+              >
+                🚪 Cerrar sesión
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-white/80">
+            Inicia sesión para ver tu perfil y tus métricas.
+          </p>
+        )}
       </div>
     </div>
   );
