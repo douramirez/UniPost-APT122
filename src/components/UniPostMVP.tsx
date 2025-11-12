@@ -377,15 +377,55 @@ className="p-3 bg-white/30 border border-white/40 text-gray-900 rounded-lg font-
           {p.variants.map((v, i) => (
             <div
               key={i}
-              className="flex justify-between items-center bg-white/5 border border-white/10 p-3 rounded-lg"
+              className="flex justify-between items-center bg-white/5 border border-white/10 p-3 rounded-lg transition-all duration-200 hover:bg-white/10"
             >
               <div>
                 <p className="font-semibold">{v.network}</p>
                 <p className="text-sm text-gray-200">{v.text}</p>
-                <p className="text-xs text-gray-400">
-                  Estado: {v.status ?? "DRAFT"}
-                </p>
+                <p className="text-xs text-gray-400">Estado: {v.status ?? "DRAFT"}</p>
               </div>
+
+              {v.network === "BLUESKY" && (
+                <button
+                  onClick={async () => {
+                    const res = await fetch("/api/publish/bluesky", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ postId: p.id, variantId: v.id }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                      toast.success("Publicado en Bluesky ✅");
+
+                      // 🔄 update local state without refresh
+                      setPosts((prev) =>
+                        prev.map((post) =>
+                          post.id === p.id
+                            ? {
+                                ...post,
+                                variants: post.variants.map((varr) =>
+                                  varr.id === v.id
+                                    ? { ...varr, status: "PUBLISHED", bskyUri: data.uri }
+                                    : varr
+                                ),
+                              }
+                            : post
+                        )
+                      );
+                    } else {
+                      toast.error("Error al publicar: " + data.error);
+                    }
+                  }}
+                  disabled={v.status === "PUBLISHED"}
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${
+                    v.status === "PUBLISHED"
+                      ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
+                      : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
+                  }`}
+                >
+                  {v.status === "PUBLISHED" ? "Publicado ✅" : "Publicar"}
+                </button>
+              )}
             </div>
           ))}
         </div>

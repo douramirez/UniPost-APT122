@@ -105,7 +105,7 @@ export default function PerfilPage() {
 
             {/* 🌤 Bluesky Section */}
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md mx-auto">
-              <h2 className="text-2xl font-bold mb-4">🌤 Vincular cuenta de Bluesky</h2>
+              <h2 className="text-2xl font-bold mb-4">🦋 Vincular cuenta de Bluesky</h2>
 
               {linked ? (
                 <>

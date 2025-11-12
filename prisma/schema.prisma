@@ -61,12 +61,13 @@ model Schedule {
 }
 
 model Variant {
-  id      Int    @id @default(autoincrement())
+  id      Int     @id @default(autoincrement())
   postId  Int
   network String
   text    String
   status  String
-  post    Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  uri     String?
+  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Metric {
