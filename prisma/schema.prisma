@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../src/generated/prisma"
@@ -15,13 +9,13 @@ datasource db {
 }
 
 model User {
-  id               Int               @id @default(autoincrement())
-  name             String?
-  email            String            @unique
-  password         String?
-  memberships      Membership[]
-  posts            Post[]            @relation("UserPosts")
-  cuentasRedSocial CuentaRedSocial[]
+  id             Int              @id @default(autoincrement())
+  name           String?
+  email          String           @unique
+  password       String?
+  BlueSky_Access BlueSky_Access[]
+  memberships    Membership[]
+  posts          Post[]           @relation("UserPosts")
 }
 
 model Organization {
@@ -37,8 +31,8 @@ model Membership {
   userId         Int
   organizationId Int
   role           String
-  user           User         @relation(fields: [userId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
 
   @@unique([userId, organizationId])
 }
@@ -51,11 +45,11 @@ model Post {
   body           String
   status         String
   mediaBase64    String?
-  variants       Variant[]
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  metrics        Metric[]
   author         User         @relation("UserPosts", fields: [authorId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
   schedule       Schedule?
-  metrics        Metric[] // 👈 Relación inversa: un post puede tener muchas métricas
+  variants       Variant[]
 }
 
 model Schedule {
@@ -84,26 +78,21 @@ model Metric {
   shares      Int      @default(0)
   impressions Int      @default(0)
   collectedAt DateTime @default(now())
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model RedSocial {
-  id      Int               @id @default(autoincrement())
-  nombre  String            @unique
-  cuentas CuentaRedSocial[]
+  id     Int    @id @default(autoincrement())
+  nombre String @unique
 }
 
-model CuentaRedSocial {
-  id            Int      @id @default(autoincrement())
+model BlueSky_Access {
+  id            Int    @id(map: "CuentaRedSocial_pkey") @unique @default(autoincrement())
   usuarioId     Int
-  redSocialId   Int
+  redSocialId   Int    @default(1)
   nombreUsuario String
-  tokenAcceso   String? // se guarda el token de acceso OAuth, no la contraseña
-  creadaEn      DateTime @default(now())
+  appPassword   String
+  User          User   @relation(fields: [usuarioId], references: [id], map: "CuentaRedSocial_usuarioId_fkey")
 
-  usuario   User      @relation(fields: [usuarioId], references: [id])
-  redSocial RedSocial @relation(fields: [redSocialId], references: [id])
-
-  @@unique([usuarioId, redSocialId]) // evita duplicar conexión a la misma red
+  @@unique([usuarioId, redSocialId], map: "CuentaRedSocial_usuarioId_redSocialId_key")
 }
