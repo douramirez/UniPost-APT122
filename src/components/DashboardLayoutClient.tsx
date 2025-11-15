@@ -1,5 +1,7 @@
 "use client";
 
+// Sidebar - Visible en todos los componentes dentro del directorio "(dashboard)"
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";

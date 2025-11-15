@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { getBskyAgent } from "@/lib/bsky/agent";
 import { prisma } from "@/lib/prisma";
+import { encryptBlueskySecret } from "@/lib/cryptoBluesky";
 
 export async function POST(req: Request) {
   const session = await getServerSession(); // ✅ works without authOptions in your setup
@@ -9,6 +10,9 @@ export async function POST(req: Request) {
   }
 
   const { identifier, password } = await req.json();
+  
+  console.log("Trying to login with:", { identifier, password });
+
 
   try {
     const agent = await getBskyAgent(identifier, password);
@@ -27,12 +31,14 @@ export async function POST(req: Request) {
       where: { usuarioId: user.id },
     });
 
+    const encryptedPassword = encryptBlueskySecret(password);
+
     if (existingAccess) {
       await prisma.blueSky_Access.update({
         where: { id: existingAccess.id },
         data: {
           nombreUsuario: identifier,
-          appPassword: password,
+          appPassword: encryptedPassword,
         },
       });
     } else {
@@ -41,7 +47,7 @@ export async function POST(req: Request) {
           usuarioId: user.id,
           redSocialId: 1,
           nombreUsuario: identifier,
-          appPassword: password,
+          appPassword: encryptedPassword,
         },
       });
     }

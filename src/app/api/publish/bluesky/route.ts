@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { AtpAgent } from "@atproto/api";
+import { decryptBlueskySecret } from "@/lib/cryptoBluesky";
 
 export async function POST(req: Request) {
   const session = await getServerSession();
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
   const { postId, variantId } = await req.json();
 
   try {
-    // 🔍 Get user and their Bluesky access credentials
+    // Busca usuario y sus credenciales de Bluesky
     const user = await prisma.user.findUnique({
       where: { email: session.user?.email ?? "" },
     });
@@ -18,15 +19,17 @@ export async function POST(req: Request) {
     const access = await prisma.blueSky_Access.findFirst({
       where: { usuarioId: user.id },
     });
-    if (!access) throw new Error("No Bluesky account linked");
+    if (!access) throw new Error("No Bluesky access found");
+
+    const decryptedPassword = decryptBlueskySecret(access.appPassword);
 
     const agent = new AtpAgent({ service: "https://bsky.social" });
     await agent.login({
       identifier: access.nombreUsuario,
-      password: access.appPassword,
+      password: decryptedPassword,
     });
 
-    // 🔍 Get post + variant info
+    // Busca información de post y sus variantes
     const variant = await prisma.variant.findUnique({
       where: { id: variantId },
     });
@@ -37,7 +40,7 @@ export async function POST(req: Request) {
     });
     if (!post) throw new Error("Post not found");
 
-    // 🧠 Prepare Bluesky post
+    // Prepara post para Bluesky 
     const record: any = {
       $type: "app.bsky.feed.post",
       text: variant.text || post.body,
@@ -62,7 +65,7 @@ export async function POST(req: Request) {
       };
     }
 
-    // 🪶 Create the post in Bluesky
+    // Creación de post en BlueSky
    const response = await agent.com.atproto.repo.createRecord({
         repo: agent.session?.did!,
         collection: "app.bsky.feed.post",
@@ -75,10 +78,34 @@ export async function POST(req: Request) {
         const uri = response.data.uri;
         const cid = response.data.cid;
 
+    const now = new Date();
+
+    // Adquiere Fecha
+    const dateOnly = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    // Adquiere Tiempo (Hora)
+    const timeOnly = new Date(
+      1970, 0, 1,
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds(),
+      now.getMilliseconds()
+    );
+
+    // Actualiza en prisma estado de variante
     await prisma.variant.update({
-        where: { id: variantId },
-        data: { status: "PUBLISHED", uri: uri },
-        });
+      where: { id: variantId },
+      data: {
+        status: "PUBLISHED",
+        uri: uri,
+        date_sent: dateOnly,
+        time_sent: timeOnly,
+      },
+    });
 
     return Response.json({ ok: true, uri });
 

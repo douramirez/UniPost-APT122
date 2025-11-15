@@ -13,6 +13,7 @@ model User {
   name           String?
   email          String           @unique
   password       String?
+  emailVerified  DateTime?
   BlueSky_Access BlueSky_Access[]
   memberships    Membership[]
   posts          Post[]           @relation("UserPosts")
@@ -45,6 +46,7 @@ model Post {
   body           String
   status         String
   mediaBase64    String?
+  creatorId      Int          @default(0)
   metrics        Metric[]
   author         User         @relation("UserPosts", fields: [authorId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -61,13 +63,15 @@ model Schedule {
 }
 
 model Variant {
-  id      Int     @id @default(autoincrement())
-  postId  Int
-  network String
-  text    String
-  status  String
-  uri     String?
-  post    Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  id        Int       @id @default(autoincrement())
+  postId    Int
+  network   String
+  text      String
+  status    String
+  uri       String?
+  date_sent DateTime? @db.Date
+  time_sent DateTime? @db.Time(6)
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Metric {
@@ -96,4 +100,11 @@ model BlueSky_Access {
   User          User   @relation(fields: [usuarioId], references: [id], map: "CuentaRedSocial_usuarioId_fkey")
 
   @@unique([usuarioId, redSocialId], map: "CuentaRedSocial_usuarioId_redSocialId_key")
+}
+
+model VerificationToken {
+  id         Int      @id @default(autoincrement())
+  identifier String
+  token      String   @unique
+  expires    DateTime
 }

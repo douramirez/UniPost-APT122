@@ -128,7 +128,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-600 text-white p-10">
       <h1 className="text-4xl font-bold mb-8 text-center">
-        📈 Dashboard de Métricas
+        📈 Dashboard de Métricas (Bluesky)
       </h1>
 
       {/* Header con perfil de Bluesky */}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 
 type VariantInput = {
   network: string;
@@ -8,7 +9,28 @@ type VariantInput = {
 
 export async function GET(req: Request) {
   try {
+    const session = await getServerSession();
+
+    if (!session || !session.user?.email) {
+      return NextResponse.json(
+        { ok: false, error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "User not found" },
+        { status: 404 }
+      );
+    }
+
     const posts = await prisma.post.findMany({
+      where: { authorId: user.id }, // 👈 solo posts del usuario
       orderBy: { id: "desc" },
       include: {
         variants: true,
@@ -28,26 +50,44 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession();
+
+    if (!session || !session.user?.email) {
+      return NextResponse.json(
+        { ok: false, error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "User not found" },
+        { status: 404 }
+      );
+    }
+
     const body = await req.json();
     const {
       organizationId,
-      authorId,
       title,
       body: baseBody,
       variants,
       mediaBase64,
     }: {
       organizationId: number;
-      authorId: number;
       title: string;
       body: string;
       variants: VariantInput[];
       mediaBase64?: string | null;
     } = body;
 
-    if (!organizationId || !authorId) {
+    if (!organizationId) {
       return NextResponse.json(
-        { ok: false, error: "MISSING_ORG_OR_AUTHOR" },
+        { ok: false, error: "MISSING_ORG" },
         { status: 400 }
       );
     }
@@ -61,7 +101,7 @@ export async function POST(req: Request) {
     const created = await prisma.post.create({
       data: {
         organizationId,
-        authorId,
+        authorId: user.id, // 👈 aquí va el ID del usuario logueado
         title,
         body: baseBody || "",
         status: "DRAFT",
@@ -100,7 +140,10 @@ export async function DELETE(req: Request) {
       );
     }
 
-    // Eliminar variantes antes del post
+    // (opcional pero recomendado) validar que el post pertenece al usuario
+    // const session = await getServerSession();
+    // ...
+
     await prisma.variant.deleteMany({
       where: { postId: Number(id) },
     });

@@ -12,8 +12,12 @@ export default function PerfilPage() {
   const [status, setStatus] = useState("");
   const [linked, setLinked] = useState(false);
   const [linkedUser, setLinkedUser] = useState("");
+  const [profile, setProfile] = useState<any>(null);
+  const [lastRefresh, setLastRefresh] = useState<number | null>(null);
+  const [refreshDisabled, setRefreshDisabled] = useState(false);
 
-  // 🧩 Fetch Bluesky status when page loads
+
+  // Busca estado de cuenta de BlueSky
   useEffect(() => {
     if (!session) return;
     (async () => {
@@ -22,10 +26,12 @@ export default function PerfilPage() {
       if (data.ok && data.linked) {
         setLinked(true);
         setLinkedUser(data.nombreUsuario);
+        loadProfile();
       }
     })();
   }, [session]);
 
+  // Envía credenciales y valida con Bluesky
   async function handleCheckAndSave() {
     setLoading(true);
     setStatus("Verificando credenciales...");
@@ -53,6 +59,7 @@ export default function PerfilPage() {
     setLoading(false);
   }
 
+  // Desvincula Bluesky
   async function handleUnlink() {
     if (!confirm("¿Seguro que quieres desvincular tu cuenta de Bluesky?")) return;
 
@@ -71,6 +78,29 @@ export default function PerfilPage() {
       setLoading(false);
     }
   }
+
+  // Cargar datos de perfil Bluesky
+  async function loadProfile() {
+    const res = await fetch("/api/bsky/profile");
+    const data = await res.json();
+    if (data.ok) {
+      setProfile(data.profile);
+    }
+  }
+
+  // Refresca datos de perfil Bluesky
+  async function handleRefresh() {
+    if (refreshDisabled) return;
+
+    await loadProfile();
+
+    setLastRefresh(Date.now());
+    setRefreshDisabled(true);
+
+    // Tiempo de espera para volver a actualizar
+    setTimeout(() => setRefreshDisabled(false), 5 * 60 * 1000);
+  }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-600 text-white p-10">
@@ -106,12 +136,49 @@ export default function PerfilPage() {
             {/* 🌤 Bluesky Section */}
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md mx-auto">
               <h2 className="text-2xl font-bold mb-4">🦋 Vincular cuenta de Bluesky</h2>
-
               {linked ? (
                 <>
                   <p className="text-green-400 font-semibold mb-4">
                     ✅ Ya vinculado como <span className="underline">{linkedUser}</span>
                   </p>
+                    {/* PROFILE CARD */}
+                    {profile && (
+                      <div className="bg-white/10 p-4 rounded-xl mb-4 text-left">
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={profile.avatar}
+                            className="w-16 h-16 rounded-full border border-white/20"
+                          />
+                          <div>
+                            <p className="text-lg font-bold">{profile.displayName}</p>
+                            <p className="text-white/70">@{profile.handle}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-around mt-4 text-white/90">
+                          <div>
+                            <p className="font-bold">{profile.followers}</p>
+                            <p className="text-xs text-white/60">Followers</p>
+                          </div>
+                          <div>
+                            <p className="font-bold">{profile.posts}</p>
+                            <p className="text-xs text-white/60">Posts</p>
+                          </div>
+                        </div>
+                        {/* Refresh button */}
+                        <button
+                          onClick={handleRefresh}
+                          disabled={refreshDisabled}
+                          className={`mt-4 w-full py-2 rounded-lg font-semibold transition-all ${
+                            refreshDisabled
+                              ? "bg-green-800 opacity-50 cursor-not-allowed"
+                              : "bg-green-500 hover:bg-green-600"
+                          }`}
+                        >
+                          {refreshDisabled ? "⏳ Espera 5 minutos" : "🔄 Actualizar datos"}
+                        </button>
+                      </div>
+                    )}
                   <button
                     onClick={handleUnlink}
                     disabled={loading}
@@ -145,9 +212,9 @@ export default function PerfilPage() {
                     disabled={loading}
                     className="w-full bg-gradient-to-r from-sky-500 to-blue-600 py-3 rounded font-semibold hover:opacity-90 transition"
                   >
-                    {loading ? "Verificando..." : "Check and Save"}
+                    {loading ? "Verificando..." : "Verificar y Guardar"}
                   </button>
-                </>
+                </> 
               )}
 
               {status && <p className="mt-4 text-sm text-white/80">{status}</p>}

@@ -72,7 +72,6 @@ export default function ComposerPage() {
 
     const payload = {
       organizationId: 1,
-      authorId: 1,
       title,
       body,
       variants,

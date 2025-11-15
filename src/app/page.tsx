@@ -12,7 +12,6 @@ export default function HomePage() {
         <nav className="hidden items-center gap-6 text-sm md:flex">
   <a href="#features" className="opacity-90 transition hover:opacity-100">Características</a>
   <a href="#benefits" className="opacity-90 transition hover:opacity-100">Beneficios</a>
-  <a href="#pricing" className="opacity-90 transition hover:opacity-100">Precios</a>
   <a href="#contact" className="opacity-90 transition hover:opacity-100">Contacto</a>
 
   {/* Botones de autenticación */}
@@ -75,10 +74,10 @@ export default function HomePage() {
                 </div>
                 <div className="rounded-xl bg-white p-4 text-slate-900">
                   <div className="mb-2 text-xs font-semibold text-indigo-600">Composer</div>
-                  <div className="mb-2 text-lg font-bold">Post de lanzamiento ✨</div>
-                  <div className="text-sm text-slate-600">Programa y publica en Instagram, Facebook, X y LinkedIn al mismo tiempo.</div>
+                  <div className="mb-2 text-lg font-bold">Prepara un nuevo Post</div>
+                  <div className="text-sm text-slate-600">Programa y publica en Instagram, Facebook, X y Bluesky al mismo tiempo.</div>
                   <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
-                    {['IG','FB','X','IN'].map((k)=> (
+                    {['IG','FB','X','BS'].map((k)=> (
                       <div key={k} className="rounded-lg bg-slate-100 px-2 py-3 text-center font-semibold">{k}</div>
                     ))}
                   </div>
