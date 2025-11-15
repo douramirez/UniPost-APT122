@@ -211,7 +211,6 @@ export default function ComposerPage() {
             <option>INSTAGRAM</option>
             <option>FACEBOOK</option>
             <option>X</option>
-            <option>LINKEDIN</option>
             <option>BLUESKY</option>
           </select>
 

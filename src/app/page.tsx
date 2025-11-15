@@ -1,6 +1,8 @@
 "use client";
 import { useSession, signOut } from "next-auth/react";
 import { PublicFeed } from "@/components/PublicFeed";
+import Image from "next/image";
+import UniPostLogo from "./assets/UniPost.png";
 
 export default function HomePage() {
   
@@ -12,9 +14,13 @@ export default function HomePage() {
       {/* Top Nav */}
       <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20Zm0 3.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13Z"/></svg>
-          </div>
+            <Image
+              src={UniPostLogo}
+              alt="UniPost Logo"
+              width={48} 
+              height={48} 
+              className="h-8 w-8" 
+            />
           <span className="text-lg font-semibold tracking-wide">UniPost</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm md:flex">

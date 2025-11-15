@@ -3,6 +3,38 @@ import { prisma } from "@/lib/prisma";
 import { AtpAgent } from "@atproto/api";
 import { decryptBlueskySecret } from "@/lib/cryptoBluesky";
 
+function buildHashtagFacets(text: string) {
+  const facets: any[] = [];
+  // Unicode letters + numbers + underscore
+  const regex = /#[\p{L}\p{N}_]+/gu;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const hashtag = match[0];          // e.g. "#Genshin"
+    const startChar = match.index;
+    const endChar = startChar + hashtag.length;
+
+    // Bluesky wants BYTE offsets (UTF-8), not char indexes
+    const byteStart = Buffer.byteLength(text.slice(0, startChar), "utf8");
+    const byteEnd = Buffer.byteLength(text.slice(0, endChar), "utf8");
+
+    facets.push({
+      index: {
+        byteStart,
+        byteEnd,
+      },
+      features: [
+        {
+          $type: "app.bsky.richtext.facet#tag",
+          tag: hashtag.slice(1), // remove the leading '#'
+        },
+      ],
+    });
+  }
+
+  return facets;
+}
+
 export async function POST(req: Request) {
   const session = await getServerSession();
   if (!session) return Response.json({ ok: false, error: "Not authenticated" }, { status: 401 });
@@ -41,11 +73,16 @@ export async function POST(req: Request) {
     if (!post) throw new Error("Post not found");
 
     // Prepara post para Bluesky 
+    const text = variant.text || post.body;
+    const facets = buildHashtagFacets(text);
+
     const record: any = {
       $type: "app.bsky.feed.post",
-      text: variant.text || post.body,
+      text,
       createdAt: new Date().toISOString(),
+      ...(facets.length ? { facets } : {}),
     };
+
 
     if (post.mediaBase64 && post.mediaBase64.startsWith("data:image")) {
       const imageBuffer = Buffer.from(

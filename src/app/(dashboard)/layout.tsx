@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
+import Image from "next/image";
+import UniPostLogo from "../assets/UniPost.png";
 
 // Sidebar visible en todos los componentes que se encuentren en
 // (dashboard)
@@ -32,23 +34,24 @@ export default function DashboardLayout({
         } flex flex-col justify-between p-6 transition-all duration-300 backdrop-blur-xl bg-white/10 border-r border-white/20 shadow-lg`}
       >
         <div>
-          {/* Botón toggle */}
-          <button
-            onClick={() => setOpen(!open)}
-            className="absolute top-4 left-4 text-white/80 hover:text-white transition"
-            aria-label="Toggle sidebar"
-          >
-            {open ? "«" : "»"}
-          </button>
 
           {/* Título o ícono */}
-          <h1
-            className={`text-2xl font-bold mb-8 tracking-wide text-center transition-all ${
-              open ? "opacity-100" : "opacity-0 w-0"
-            }`}
-          >
-            UniPost
-          </h1>
+          <div className="flex items-center gap-3 mb-8">
+            <Image
+                src={UniPostLogo}
+                alt="UniPost Logo"
+                width={48} 
+                height={48} 
+                className="h-8 w-8" 
+              />
+            <h1
+              className={`text-2xl font-bold tracking-wide transition-all ${
+                open ? "opacity-100" : "opacity-0 w-0"
+              }`}
+            >
+              UniPost
+            </h1>
+          </div>
 
           {/* Menú */}
           <nav className="space-y-2 mt-10">
