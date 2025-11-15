@@ -1,4 +1,12 @@
+"use client";
+import { useSession, signOut } from "next-auth/react";
+import { PublicFeed } from "@/components/PublicFeed";
+
 export default function HomePage() {
+  
+
+  const { data: session } = useSession();
+
   return (
     <main className="min-h-screen w-full bg-gradient-to-b from-indigo-700 via-fuchsia-600 to-rose-500 text-white">
       {/* Top Nav */}
@@ -14,21 +22,42 @@ export default function HomePage() {
   <a href="#benefits" className="opacity-90 transition hover:opacity-100">Beneficios</a>
   <a href="#contact" className="opacity-90 transition hover:opacity-100">Contacto</a>
 
-  {/* Botones de autenticación */}
+  {/* Botones de autenticación o botones de sesión activa */}
   <div className="flex items-center gap-3">
-    <a
-      href="/login"
-      className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-white backdrop-blur-sm hover:bg-white/10 transition"
-    >
-      Iniciar sesión
-    </a>
-    <a
-      href="/register"
-      className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg transition"
-    >
-      Registrarse
-    </a>
+    {!session ? (
+      <>
+        <a
+          href="/login"
+          className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-white backdrop-blur-sm hover:bg-white/10 transition"
+        >
+          Iniciar sesión
+        </a>
+        <a
+          href="/register"
+          className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg transition"
+        >
+          Registrarse
+        </a>
+      </>
+    ) : (
+      <>
+        <a
+          href="/composer"
+          className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg transition"
+        >
+          Ir a la App
+        </a>
+
+        <button
+          onClick={() => signOut({ callbackUrl: "/" })}
+          className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-white backdrop-blur-sm hover:bg-white/10 transition"
+        >
+          Cerrar sesión
+        </button>
+      </>
+    )}
   </div>
+
 </nav>
 
       </header>
@@ -98,6 +127,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+          
+      <PublicFeed/>
 
       {/* Features */}
       <section id="features" className="mx-auto max-w-7xl px-6 py-16">
@@ -105,7 +136,7 @@ export default function HomePage() {
         <p className="mx-auto mt-2 max-w-2xl text-center text-sm opacity-90">Un flujo simple para crear, programar y publicar sin fricción.</p>
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {[
-            {title:'Publicación multired',desc:'Instagram, Facebook, X y LinkedIn con un clic.'},
+            {title:'Publicación multired',desc:'Instagram, Facebook, X y Bluesky con un clic.'},
             {title:'Programación inteligente',desc:'Ajuste por zona horaria y reintentos automáticos.'},
             {title:'Roles y equipo',desc:'Colabora con aprobaciones y control de cambios.'},
           ].map((f)=> (
@@ -135,6 +166,7 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+    
 
       {/* Pricing teaser */}
       <section id="pricing" className="mx-auto max-w-7xl px-6 pb-20">

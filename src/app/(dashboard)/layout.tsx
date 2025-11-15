@@ -5,6 +5,9 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 
+// Sidebar visible en todos los componentes que se encuentren en
+// (dashboard)
+
 export default function DashboardLayout({
   children,
 }: {
@@ -14,6 +17,7 @@ export default function DashboardLayout({
   const [open, setOpen] = useState(true);
 
   const menuItems = [
+    { href: "/", label: "🏠 Inicio"},
     { href: "/perfil", label: "👤 Perfil" },
     { href: "/composer", label: "✏️ Composer" },
     { href: "/metricas", label: "📊 Métricas" },

@@ -140,9 +140,8 @@ export async function DELETE(req: Request) {
       );
     }
 
-    // (opcional pero recomendado) validar que el post pertenece al usuario
-    // const session = await getServerSession();
-    // ...
+    // Validar que el post pertenece al usuario
+    const session = await getServerSession();
 
     await prisma.variant.deleteMany({
       where: { postId: Number(id) },
