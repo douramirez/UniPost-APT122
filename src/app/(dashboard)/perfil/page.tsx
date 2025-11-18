@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 export default function PerfilPage() {
   const { data: session } = useSession();
 
+  // --- BLUESKY state ---
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,21 @@ export default function PerfilPage() {
   const [refreshDisabled, setRefreshDisabled] = useState(false);
   const [checkingLinkStatus, setCheckingLinkStatus] = useState(true);
   const [checkingProfile, setCheckingProfile] = useState(true);
+
+  // --- INSTAGRAM state ---
+  const [igLinked, setIgLinked] = useState(false);
+  const [igUsername, setIgUsername] = useState("");
+  const [igCheckingStatus, setIgCheckingStatus] = useState(true);
+  const [igStatus, setIgStatus] = useState("");
+  const [igLoading, setIgLoading] = useState(false);
+  // ------------------------
+
+  // --- INSTAGRAM profile data ---
+  const [igProfile, setIgProfile] = useState<any>(null);
+  const [igCheckingProfile, setIgCheckingProfile] = useState(false);
+  const [igLastRefresh, setIgLastRefresh] = useState<number | null>(null);
+  const [igRefreshDisabled, setIgRefreshDisabled] = useState(false);
+  // -------------------------------
 
   // Busca estado de cuenta de BlueSky
   useEffect(() => {
@@ -35,6 +51,30 @@ export default function PerfilPage() {
       setCheckingLinkStatus(false);
     })();
   }, [session]);
+
+  // --- Busca estado de cuenta de Instagram ---
+    useEffect(() => {
+    if (!session) return;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/instagram/status");
+        const data = await res.json();
+
+        if (data.ok && data.linked) {
+          setIgLinked(true);
+          setIgUsername(data.username);
+          // cargar perfil en segundo plano
+          loadInstagramProfile();
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIgCheckingStatus(false);
+      }
+    })();
+  }, [session]);
+  // -------------------------------------------
 
   // Envía credenciales y valida con Bluesky
   async function handleCheckAndSave() {
@@ -106,6 +146,65 @@ export default function PerfilPage() {
     setTimeout(() => setRefreshDisabled(false), 5 * 60 * 1000);
   }
 
+  // --- INSTAGRAM: iniciar flujo de vinculación (OAuth) ---
+  async function handleInstagramConnect() {
+    setIgLoading(true);
+    setIgStatus("Redirigiendo a Instagram...");
+
+    // Aquí simplemente redirigimos al backend que construye la URL de OAuth
+    window.location.href = "/api/instagram/connect";
+  }
+
+  // --- INSTAGRAM: desvincular ---
+  async function handleInstagramUnlink() {
+    if (!confirm("¿Seguro que quieres desvincular tu cuenta de Instagram?")) return;
+
+    setIgLoading(true);
+    try {
+      const res = await fetch("/api/instagram/unlink", { method: "DELETE" });
+      const data = await res.json();
+      if (data.ok) {
+        setIgLinked(false);
+        setIgUsername("");
+        setIgStatus("🔓 Cuenta de Instagram desvinculada");
+      } else {
+        setIgStatus("❌ Error al desvincular Instagram");
+      }
+    } catch {
+      setIgStatus("⚠️ Error de conexión con el servidor");
+    } finally {
+      setIgLoading(false);
+    }
+  }
+  // -------------------------------------------------------
+  
+  // Cargar datos de perfil de Instagram
+  async function loadInstagramProfile() {
+    setIgCheckingProfile(true);
+    try {
+      const res = await fetch("/api/instagram/profile");
+      const data = await res.json();
+      if (data.ok && data.profile) {
+        setIgProfile(data.profile);
+      } else {
+        console.warn("No se pudo cargar perfil IG:", data.error);
+      }
+    } catch (err) {
+      console.error("Error cargando perfil IG:", err);
+    } finally {
+      setIgCheckingProfile(false);
+    }
+  }
+
+  async function handleInstagramRefresh() {
+    if (igRefreshDisabled) return;
+
+    await loadInstagramProfile();
+    setIgLastRefresh(Date.now());
+    setIgRefreshDisabled(true);
+    setTimeout(() => setIgRefreshDisabled(false), 5 * 60 * 1000);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-600 text-white p-10">
       <div className="max-w-5xl mx-auto text-center">
@@ -135,100 +234,200 @@ export default function PerfilPage() {
                 🚪 Cerrar sesión
               </button>
             </div>
-            {/* Bluesky */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 max-w-md mx-auto">
-              <h2 className="text-2xl font-bold mb-4">🦋 Vincular cuenta de Bluesky</h2>
-              {/* Cobertura mientras se verifica el estado de la cuenta */}
-              {checkingLinkStatus ? (
-                <p className="text-white/70 text-sm animate-pulse">
-                  🔄 Revisando estado de la cuenta...
-                </p>
-              ) : linked ? (
-                <>
-                  <p className="text-green-400 font-semibold mb-4">
-                    ✅ Ya vinculado como <span className="underline">{linkedUser}</span>
+
+            {/* CONTENEDOR DE CONEXIONES */}
+            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              {/* Bluesky */}
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8">
+                <h2 className="text-2xl font-bold mb-4">🦋 Vincular Bluesky</h2>
+                {/* Cobertura mientras se verifica el estado de la cuenta */}
+                {checkingLinkStatus ? (
+                  <p className="text-white/70 text-sm animate-pulse">
+                    🔄 Revisando estado de la cuenta...
                   </p>
-
-                  {/* PROFILE CARD */}
-                  {checkingProfile ? (
-                    <p className="text-white/70 text-sm animate-pulse mb-4">
-                      ⏳ Cargando datos del perfil...
+                ) : linked ? (
+                  <>
+                    <p className="text-green-400 font-semibold mb-4">
+                      ✅ Ya vinculado como <span className="underline">{linkedUser}</span>
                     </p>
-                  ) : profile && (
-                    <div className="bg-white/10 p-4 rounded-xl mb-4 text-left">
-                      <div className="flex items-center gap-4">
-                        <img
-                          src={profile.avatar}
-                          className="w-16 h-16 rounded-full border border-white/20"
-                          alt="Avatar de Bluesky"
-                        />
-                        <div>
-                          <p className="text-lg font-bold">{profile.displayName}</p>
-                          <p className="text-white/70">@{profile.handle}</p>
-                        </div>
-                      </div>
 
-                      <div className="flex justify-around mt-4 text-white/90">
-                        <div>
-                          <p className="font-bold">{profile.followers}</p>
-                          <p className="text-xs text-white/60">Followers</p>
+                    {/* PROFILE CARD */}
+                    {checkingProfile ? (
+                      <p className="text-white/70 text-sm animate-pulse mb-4">
+                        ⏳ Cargando datos del perfil...
+                      </p>
+                    ) : profile && (
+                      <div className="bg-white/10 p-4 rounded-xl mb-4 text-left">
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={profile.avatar}
+                            className="w-16 h-16 rounded-full border border-white/20"
+                            alt="Avatar de Bluesky"
+                          />
+                          <div>
+                            <p className="text-lg font-bold">{profile.displayName}</p>
+                            <p className="text-white/70">@{profile.handle}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold">{profile.posts}</p>
-                          <p className="text-xs text-white/60">Posts</p>
+
+                        <div className="flex justify-around mt-4 text-white/90">
+                          <div>
+                            <p className="font-bold">{profile.followers}</p>
+                            <p className="text-xs text-white/60">Followers</p>
+                          </div>
+                          <div>
+                            <p className="font-bold">{profile.posts}</p>
+                            <p className="text-xs text-white/60">Posts</p>
+                          </div>
                         </div>
+                        <button
+                          onClick={handleRefresh}
+                          disabled={refreshDisabled}
+                          className={`mt-4 w-full py-2 rounded-lg font-semibold transition-all ${
+                            refreshDisabled
+                              ? "bg-green-800 opacity-50 cursor-not-allowed"
+                              : "bg-green-500 hover:bg-green-600"
+                          }`}
+                        >
+                          {refreshDisabled ? "⏳ Espera 5 minutos" : "🔄 Actualizar datos"}
+                        </button>
                       </div>
-                      <button
-                        onClick={handleRefresh}
-                        disabled={refreshDisabled}
-                        className={`mt-4 w-full py-2 rounded-lg font-semibold transition-all ${
-                          refreshDisabled
-                            ? "bg-green-800 opacity-50 cursor-not-allowed"
-                            : "bg-green-500 hover:bg-green-600"
-                        }`}
-                      >
-                        {refreshDisabled ? "⏳ Espera 5 minutos" : "🔄 Actualizar datos"}
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    onClick={handleUnlink}
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-red-500 to-pink-600 py-3 rounded font-semibold hover:opacity-90 transition"
-                  >
-                    {loading ? "Procesando..." : "Desvincular cuenta"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {/* Campos para enlazar cuenta Bluesky */}
-                  <a href="https://bsky.app/settings/app-passwords">
-                    <p className="text-white/70 mb-6">Consigue tu clave de aplicación aquí</p>
-                  </a>
-                  <input
-                    type="text"
-                    placeholder="Email o handle (ej: user.bsky.social)"
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    className="w-full p-3 mb-3 rounded bg-white/10 border border-white/20 placeholder-gray-300"
-                  />
-                  <input
-                    type="password"
-                    placeholder="App Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 placeholder-gray-300"
-                  />
-                  <button
-                    onClick={handleCheckAndSave}
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-sky-500 to-blue-600 py-3 rounded font-semibold hover:opacity-90 transition"
-                  >
-                    {loading ? "Verificando..." : "Verificar y Guardar"}
-                  </button>
-                </> 
-              )}
-              {status && <p className="mt-4 text-sm text-white/80">{status}</p>}
+                    )}
+                    <button
+                      onClick={handleUnlink}
+                      disabled={loading}
+                      className="w-full bg-gradient-to-r from-red-500 to-pink-600 py-3 rounded font-semibold hover:opacity-90 transition"
+                    >
+                      {loading ? "Procesando..." : "Desvincular cuenta"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* Campos para enlazar cuenta Bluesky */}
+                    <a href="https://bsky.app/settings/app-passwords">
+                      <p className="text-white/70 mb-6">Consigue tu clave de aplicación aquí</p>
+                    </a>
+                    <input
+                      type="text"
+                      placeholder="Email o handle (ej: user.bsky.social)"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      className="w-full p-3 mb-3 rounded bg-white/10 border border-white/20 placeholder-gray-300"
+                    />
+                    <input
+                      type="password"
+                      placeholder="App Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 placeholder-gray-300"
+                    />
+                    <button
+                      onClick={handleCheckAndSave}
+                      disabled={loading}
+                      className="w-full bg-gradient-to-r from-sky-500 to-blue-600 py-3 rounded font-semibold hover:opacity-90 transition"
+                    >
+                      {loading ? "Verificando..." : "Verificar y Guardar"}
+                    </button>
+                  </>
+                )}
+                {status && <p className="mt-4 text-sm text-white/80">{status}</p>}
+              </div>
+
+              {/* Instagram */}
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8">
+                <h2 className="text-2xl font-bold mb-4">📸 Vincular Instagram</h2>
+
+                {igCheckingStatus ? (
+  <p className="text-white/70 text-sm animate-pulse">
+    🔄 Revisando estado de la cuenta...
+  </p>
+) : igLinked ? (
+  <>
+    <p className="text-green-400 font-semibold mb-4">
+      ✅ Instagram vinculado como{" "}
+      <span className="underline">@{igUsername}</span>
+    </p>
+
+    {/* Tarjeta de perfil IG */}
+    {igCheckingProfile ? (
+      <p className="text-white/70 text-sm animate-pulse mb-4">
+        ⏳ Cargando datos del perfil de Instagram...
+      </p>
+    ) : (
+      igProfile && (
+        <div className="bg-white/10 p-4 rounded-xl mb-4 text-left">
+          <div className="flex items-center gap-4">
+            <img
+              src={igProfile.profilePictureUrl || "https://cdn-icons-png.flaticon.com/512/733/733558.png"}
+              className="w-16 h-16 rounded-full border border-white/20"
+              alt="Avatar de Instagram"
+            />
+            <div>
+              <p className="text-lg font-bold">@{igProfile.username}</p>
+              <p className="text-white/70 text-xs">
+                Última actualización:{" "}
+                {igLastRefresh
+                  ? new Date(igLastRefresh).toLocaleTimeString()
+                  : "ahora"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-around mt-4 text-white/90">
+            <div>
+              <p className="font-bold">
+                {igProfile.followers.toLocaleString("es-CL")}
+              </p>
+              <p className="text-xs text-white/60">Followers</p>
+            </div>
+            <div>
+              <p className="font-bold">
+                {igProfile.posts.toLocaleString("es-CL")}
+              </p>
+              <p className="text-xs text-white/60">Posts</p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleInstagramRefresh}
+            disabled={igRefreshDisabled}
+            className={`mt-4 w-full py-2 rounded-lg font-semibold transition-all ${
+              igRefreshDisabled
+                ? "bg-pink-800 opacity-50 cursor-not-allowed"
+                : "bg-pink-500 hover:bg-pink-600"
+            }`}
+          >
+            {igRefreshDisabled ? "⏳ Espera 5 minutos" : "🔄 Actualizar datos"}
+          </button>
+        </div>
+      )
+    )}
+
+    <button
+      onClick={handleInstagramUnlink}
+      disabled={igLoading}
+      className="w-full bg-gradient-to-r from-red-500 to-pink-600 py-3 rounded font-semibold hover:opacity-90 transition"
+    >
+      {igLoading ? "Procesando..." : "Desvincular Instagram"}
+    </button>
+  </>
+) : (
+  <>
+    <p className="text-white/70 mb-6 text-sm">
+      Para publicar en Instagram, primero debes conectar una cuenta Profesional
+      (Business/Creator) vinculada a una página de Facebook.
+    </p>
+    <button
+      onClick={handleInstagramConnect}
+      disabled={igLoading}
+      className="w-full bg-gradient-to-r from-pink-500 to-yellow-500 py-3 rounded font-semibold hover:opacity-90 transition"
+    >
+      {igLoading ? "Redirigiendo..." : "🔗 Conectar con Instagram"}
+    </button>
+  </>
+)}
+                {igStatus && <p className="mt-4 text-sm text-white/80">{igStatus}</p>}
+              </div>
             </div>
           </>
         ) : (

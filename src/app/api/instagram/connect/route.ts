@@ -1,0 +1,50 @@
+// src/app/api/instagram/connect/route.ts
+
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+const FB_VERSION = process.env.FACEBOOK_API_VERSION ?? "v21.0";
+const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID!;
+const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI!;
+// Ejemplo: "https://tusitio.com/api/instagram/callback"
+
+export async function GET() {
+  const session = await auth();
+
+  if (!session?.user?.email) {
+    // Si no hay sesión, lo mandamos al login
+    const signInUrl = new URL("/api/auth/signin", process.env.NEXTAUTH_URL);
+    return NextResponse.redirect(signInUrl.toString());
+  }
+
+  // Buscamos el usuario por email para obtener su id numérico
+  const user = await prisma.user.findUnique({
+    where: { email: session.user.email },
+  });
+
+  if (!user) {
+    const signInUrl = new URL("/api/auth/signin", process.env.NEXTAUTH_URL);
+    return NextResponse.redirect(signInUrl.toString());
+  }
+
+  // Usamos el id de la base de datos como "state" (puedes firmarlo si quieres)
+  const state = encodeURIComponent(String(user.id));
+
+  const url = new URL(`https://www.facebook.com/${FB_VERSION}/dialog/oauth`);
+  url.searchParams.set("client_id", INSTAGRAM_APP_ID);
+  url.searchParams.set("redirect_uri", INSTAGRAM_REDIRECT_URI);
+  url.searchParams.set("scope",
+  [
+    "instagram_basic",
+    "instagram_content_publish",
+    "pages_show_list",
+    "pages_read_engagement",
+    "business_management",
+  ].join(",")
+);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("state", state);
+
+  return NextResponse.redirect(url.toString());
+}

@@ -1,10 +1,13 @@
-import NextAuth from "next-auth";
+// app/api/auth/[...nextauth]/route.ts
+
+import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
-const handler = NextAuth({
+// ✅ Exported config so we can reuse it with getServerSession
+export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
@@ -23,12 +26,17 @@ const handler = NextAuth({
 
         const valid = await bcrypt.compare(credentials.password, user.password);
         return valid ? user : null;
-      },
-    }),
+        }
+      }
+    ),
   ],
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login" },
-});
+};
 
+// NextAuth handler usando las opciones de arriba
+const handler = NextAuth(authOptions);
+
+// Necesario para App Router (GET/POST)
 export { handler as GET, handler as POST };

@@ -9,14 +9,17 @@ datasource db {
 }
 
 model User {
-  id             Int              @id @default(autoincrement())
-  name           String?
-  email          String           @unique
-  password       String?
-  emailVerified  DateTime?
-  BlueSky_Access BlueSky_Access[]
-  memberships    Membership[]
-  posts          Post[]           @relation("UserPosts")
+  id               Int                @id @default(autoincrement())
+  name             String?
+  email            String             @unique
+  emailVerified    DateTime?
+  password         String?
+  roleID           BigInt?
+  BlueSky_Access   BlueSky_Access[]
+  Instagram_Access Instagram_Access[]
+  memberships      Membership[]
+  posts            Post[]             @relation("UserPosts")
+  Role             Role?              @relation(fields: [roleID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Organization {
@@ -45,8 +48,8 @@ model Post {
   title          String
   body           String
   status         String
-  mediaBase64    String?
   creatorId      Int          @default(0)
+  mediaBase64    String?
   metrics        Metric[]
   author         User         @relation("UserPosts", fields: [authorId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -68,9 +71,9 @@ model Variant {
   network   String
   text      String
   status    String
-  uri       String?
   date_sent DateTime? @db.Date
   time_sent DateTime? @db.Time(6)
+  uri       String?
   post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
@@ -87,17 +90,20 @@ model Metric {
 }
 
 model RedSocial {
-  id     Int    @id @default(autoincrement())
-  nombre String @unique
+  id               Int                @id @default(autoincrement())
+  nombre           String             @unique
+  BlueSky_Access   BlueSky_Access[]
+  Instagram_Access Instagram_Access[]
 }
 
 model BlueSky_Access {
-  id            Int    @id(map: "CuentaRedSocial_pkey") @unique @default(autoincrement())
+  id            Int       @id(map: "CuentaRedSocial_pkey") @unique @default(autoincrement())
   usuarioId     Int
-  redSocialId   Int    @default(1)
+  redSocialId   Int       @default(1)
   nombreUsuario String
   appPassword   String
-  User          User   @relation(fields: [usuarioId], references: [id], map: "CuentaRedSocial_usuarioId_fkey")
+  RedSocial     RedSocial @relation(fields: [redSocialId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User          User      @relation(fields: [usuarioId], references: [id], map: "CuentaRedSocial_usuarioId_fkey")
 
   @@unique([usuarioId, redSocialId], map: "CuentaRedSocial_usuarioId_redSocialId_key")
 }
@@ -107,4 +113,22 @@ model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Instagram_Access {
+  id          BigInt    @id @default(autoincrement())
+  userId      Int
+  redSocial   Int       @default(2)
+  usuarioRed  String
+  accessToken String?
+  RedSocial   RedSocial @relation(fields: [redSocial], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  User        User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model Role {
+  id     BigInt @id @default(autoincrement())
+  nombre String
+  User   User[]
 }
