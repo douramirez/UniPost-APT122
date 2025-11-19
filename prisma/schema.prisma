@@ -50,6 +50,7 @@ model Post {
   status         String
   creatorId      Int          @default(0)
   mediaBase64    String?
+  medias         Media[]
   metrics        Metric[]
   author         User         @relation("UserPosts", fields: [authorId], references: [id])
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -131,4 +132,26 @@ model Role {
   id     BigInt @id @default(autoincrement())
   nombre String
   User   User[]
+}
+
+model Media {
+  id             Int       @id @default(autoincrement())
+  postId         Int
+  url            String
+  type           MediaType
+  mime           String
+  width          Int?
+  height         Int?
+  duration       Int?
+  size           Int?
+  createdAt      DateTime  @default(now())
+  originalBase64 String?
+  mediaLocation  String
+  mediaOrder     Int       @default(1)
+  post           Post      @relation(fields: [postId], references: [id])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
 }

@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { AtpAgent } from "@atproto/api";
 import { decryptBlueskySecret } from "@/lib/cryptoBluesky";
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
 function buildHashtagFacets(text: string) {
   const facets: any[] = [];
   // Unicode letters + numbers + underscore
@@ -10,13 +13,17 @@ function buildHashtagFacets(text: string) {
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
-    const hashtag = match[0];          // e.g. "#Genshin"
+    const hashtag = match[0]; // e.g. "#Genshin"
     const startChar = match.index;
     const endChar = startChar + hashtag.length;
 
-    // Bluesky wants BYTE offsets (UTF-8), not char indexes
-    const byteStart = Buffer.byteLength(text.slice(0, startChar), "utf8");
-    const byteEnd = Buffer.byteLength(text.slice(0, endChar), "utf8");
+    const encoder = new TextEncoder();
+    const fullTextBytes = encoder.encode(text);
+    const beforeBytes = encoder.encode(text.slice(0, startChar));
+    const hashtagBytes = encoder.encode(text.slice(startChar, endChar));
+
+    const byteStart = beforeBytes.length;
+    const byteEnd = byteStart + hashtagBytes.length;
 
     facets.push({
       index: {
@@ -37,7 +44,11 @@ function buildHashtagFacets(text: string) {
 
 export async function POST(req: Request) {
   const session = await getServerSession();
-  if (!session) return Response.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  if (!session)
+    return Response.json(
+      { ok: false, error: "Not authenticated" },
+      { status: 401 },
+    );
 
   const { postId, variantId } = await req.json();
 
@@ -61,7 +72,7 @@ export async function POST(req: Request) {
       password: decryptedPassword,
     });
 
-    // Busca información de post y sus variantes
+    // Busca información de post y su variante
     const variant = await prisma.variant.findUnique({
       where: { id: variantId },
     });
@@ -69,11 +80,61 @@ export async function POST(req: Request) {
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
+      include: {
+        medias: {
+          orderBy: { mediaOrder: "asc" }, // mismo orden que el carrusel del composer
+        },
+      },
     });
     if (!post) throw new Error("Post not found");
 
-    // Prepara post para Bluesky 
-    const text = variant.text || post.body;
+    const medias = post.medias ?? [];
+
+    const imageMedias = medias.filter(
+      (m) =>
+        m.type === "IMAGE" ||
+        (m.mime || "").toLowerCase().startsWith("image/"),
+    );
+    const videoMedias = medias.filter(
+      (m) =>
+        m.type === "VIDEO" ||
+        (m.mime || "").toLowerCase().startsWith("video/"),
+    );
+
+    // 🔒 Reglas Bluesky: máx 4 imágenes o 1 video (sin mezclar)
+    if (videoMedias.length > 1) {
+      return Response.json(
+        { ok: false, error: "Bluesky solo permite 1 video por post." },
+        { status: 400 },
+      );
+    }
+
+    if (videoMedias.length === 1 && imageMedias.length > 0) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "Bluesky no permite mezclar imágenes y video en el mismo post.",
+        },
+        { status: 400 },
+      );
+    }
+
+    let mode: "text" | "images" | "video" = "text";
+
+    if (videoMedias.length === 1) {
+      mode = "video";
+    } else if (imageMedias.length > 0) {
+      mode = "images";
+    }
+
+    const selectedImages =
+      mode === "images" ? imageMedias.slice(0, 4) : [];
+    const selectedVideo =
+      mode === "video" ? videoMedias[0] : null;
+
+    // Prepara texto y facets
+    const text = (variant.text || post.body || "").toString();
     const facets = buildHashtagFacets(text);
 
     const record: any = {
@@ -83,37 +144,68 @@ export async function POST(req: Request) {
       ...(facets.length ? { facets } : {}),
     };
 
+    // Construir embed según modo
+    if (mode === "images" && selectedImages.length > 0) {
+      const images: any[] = [];
 
-    if (post.mediaBase64 && post.mediaBase64.startsWith("data:image")) {
-      const imageBuffer = Buffer.from(
-        post.mediaBase64.split(",")[1],
-        "base64"
-      );
+      for (const media of selectedImages) {
+        // Construimos la URL pública. Si es relativa, la pegamos a APP_URL.
+        const mediaUrl = media.url.startsWith("http")
+          ? media.url
+          : `${APP_URL}${media.url}`;
 
-      const blob = await agent.uploadBlob(imageBuffer, { encoding: "image/png" });
-      record.embed = {
-        $type: "app.bsky.embed.images",
-        images: [
-          {
-            image: blob.data.blob,
-            alt: post.title || "Post image",
-          },
-        ],
-      };
-    }
+        const resImg = await fetch(mediaUrl);
+        if (!resImg.ok) {
+          throw new Error("No se pudo descargar la imagen para Bluesky");
+        }
 
-    // Creación de post en BlueSky
-   const response = await agent.com.atproto.repo.createRecord({
-        repo: agent.session?.did!,
-        collection: "app.bsky.feed.post",
-        record,
+        const arrayBuffer = await resImg.arrayBuffer();
+        const imageBuffer = Buffer.from(arrayBuffer);
+
+        const blob = await agent.uploadBlob(imageBuffer, {
+          encoding: media.mime || "image/jpeg",
         });
 
-        // Debug de la respuesta de BSKY
-        console.log("Bluesky createRecord response:", response);
+        images.push({
+          image: blob.data.blob,
+          alt: post.title || "Post image",
+        });
+      }
 
-        const uri = response.data.uri;
-        const cid = response.data.cid;
+      record.embed = {
+        $type: "app.bsky.embed.images",
+        images,
+      };
+    } else if (mode === "video" && selectedVideo) {
+      // Implementación simple: video como enlace externo
+      // (Más adelante se puede migrar a app.bsky.embed.video si quieres soporte nativo)
+      const videoUrl = selectedVideo.url.startsWith("http")
+        ? selectedVideo.url
+        : `${APP_URL}${selectedVideo.url}`;
+
+      record.embed = {
+        $type: "app.bsky.embed.external",
+        external: {
+          uri: videoUrl,
+          title: post.title || "Video",
+          description: "",
+        },
+      };
+    }
+    // Si mode === "text", no se agrega embed
+
+    // Creación de post en Bluesky
+    const response = await agent.com.atproto.repo.createRecord({
+      repo: agent.session?.did!,
+      collection: "app.bsky.feed.post",
+      record,
+    });
+
+    // Debug de la respuesta de BSKY
+    console.log("Bluesky createRecord response:", response);
+
+    const uri = response.data.uri;
+    const cid = response.data.cid;
 
     const now = new Date();
 
@@ -121,16 +213,18 @@ export async function POST(req: Request) {
     const dateOnly = new Date(
       now.getFullYear(),
       now.getMonth(),
-      now.getDate()
+      now.getDate(),
     );
 
     // Adquiere Tiempo (Hora)
     const timeOnly = new Date(
-      1970, 0, 1,
+      1970,
+      0,
+      1,
       now.getHours(),
       now.getMinutes(),
       now.getSeconds(),
-      now.getMilliseconds()
+      now.getMilliseconds(),
     );
 
     // Actualiza en prisma estado de variante
@@ -145,9 +239,11 @@ export async function POST(req: Request) {
     });
 
     return Response.json({ ok: true, uri });
-
   } catch (err: any) {
     console.error("Bluesky publish error:", err);
-    return Response.json({ ok: false, error: err.message }, { status: 400 });
+    return Response.json(
+      { ok: false, error: err.message },
+      { status: 400 },
+    );
   }
 }

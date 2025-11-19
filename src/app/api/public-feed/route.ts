@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const variants = await prisma.variant.findMany({
       where: {
-        status: "PUBLISHED",
+        status: "PUBLISHED", // Query para llamar solo las variantes publicadas
         uri: { not: null },
       },
       orderBy: { id: "desc" },
