@@ -1,4 +1,4 @@
-// app/api/auth/[...nextauth]/route.ts
+// /app/api/auth/[...nextauth]/route.ts
 
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -6,7 +6,6 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
-// Exportamos configuración para poder reutilizarlo despues con getServerSession
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -22,21 +21,49 @@ export const authOptions: NextAuthOptions = {
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
-        if (!user || !user.password) return null;
+
+        if (!user) return null;
 
         const valid = await bcrypt.compare(credentials.password, user.password);
-        return valid ? user : null;
+        if (!valid) return null;
+
+        // ⛔ Bloquear si NO está verificado
+        if (!user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED"); // Aquí se lanza el error
         }
-      }
-    ),
+
+        return user;
+      },
+    }),
   ],
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login" },
+
+  // Callbacks para manejar el JWT y la sesión
+  callbacks: {
+    async signIn({ user }) {
+      if (!user?.emailVerified) {
+        throw new Error("EMAIL_NOT_VERIFIED");
+      }
+      return true;
+    },
+
+    async jwt({ token, user }) {
+      if (user) {
+        token.emailVerified = user.emailVerified;
+      }
+      return token;
+    },
+
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.emailVerified = token.emailVerified;
+      }
+      return session;
+    },
+  },
 };
 
-// NextAuth handler usando las opciones de arriba
 const handler = NextAuth(authOptions);
-
-// Necesario para App Router (GET/POST)
 export { handler as GET, handler as POST };

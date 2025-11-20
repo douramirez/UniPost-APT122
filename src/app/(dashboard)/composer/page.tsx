@@ -2,25 +2,25 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";  // Asegúrate de importar useEffect
 import UniPostMVP from "@/components/UniPostMVP";
 
 export default function Page() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  useEffect(() => {
+    // Si el estado es "unauthenticated", redirigir al login
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);  // Se ejecuta cuando `status` cambia
+
   if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white text-lg">
-        Verificando sesión...
-      </div>
-    );
+    // Mientras la sesión se está verificando, no mostrar nada
+    return null; // No renderizamos nada, para evitar mostrar la página de composer
   }
 
-  if (!session) {
-    router.push("/login");
-    return null;
-  }
-
-  // Si hay sesión activa, muestra tu componente principal
+  // Si el usuario está autenticado, mostrar el contenido del composer
   return <UniPostMVP />;
 }
