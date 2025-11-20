@@ -1,7 +1,12 @@
+
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { AtpAgent } from "@atproto/api";
 import { decryptBlueskySecret } from "@/lib/cryptoBluesky";
+import sharp from "sharp";
+
+const MAX_BSKY_IMAGE_BYTES = 1_000_000; // ≈ 976.56 KiB
+export const runtime = "nodejs";
 
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -40,6 +45,52 @@ function buildHashtagFacets(text: string) {
   }
 
   return facets;
+}
+
+async function compressToSizeLimit(
+  input: Buffer,
+  mime?: string,
+  maxBytes: number = MAX_BSKY_IMAGE_BYTES,
+): Promise<Buffer> {
+  const lowerMime = (mime || "").toLowerCase();
+  const usePng = lowerMime.includes("png");
+
+  let pipeline = sharp(input, { failOnError: false });
+  const meta = await pipeline.metadata();
+
+  const MAX_WIDTH = 2048;
+  if ((meta.width ?? 0) > MAX_WIDTH) {
+    pipeline = pipeline.resize(MAX_WIDTH);
+  }
+
+  let quality = 85;
+  let output: Buffer;
+
+  while (true) {
+    if (usePng) {
+      output = await pipeline.png({ quality }).toBuffer();
+    } else {
+      output = await pipeline
+        .jpeg({
+          quality,
+          mozjpeg: true,
+        })
+        .toBuffer();
+    }
+
+    if (output.byteLength <= maxBytes) break;
+
+    quality -= 10;
+    if (quality < 30) break; // no destruimos la imagen
+  }
+
+  if (output.byteLength > maxBytes) {
+    throw new Error(
+      `Could not compress image below ${maxBytes} bytes (final size: ${output.byteLength})`,
+    );
+  }
+
+  return output;
 }
 
 export async function POST(req: Request) {
@@ -149,25 +200,32 @@ export async function POST(req: Request) {
       const images: any[] = [];
 
       for (const media of selectedImages) {
-        // Construimos la URL pública. Si es relativa, la pegamos a APP_URL.
         const mediaUrl = media.url.startsWith("http")
           ? media.url
           : `${APP_URL}${media.url}`;
 
         const resImg = await fetch(mediaUrl);
         if (!resImg.ok) {
-          throw new Error("No se pudo descargar la imagen para Bluesky");
+          throw new Error("Could not download image for Bluesky");
         }
 
         const arrayBuffer = await resImg.arrayBuffer();
-        const imageBuffer = Buffer.from(arrayBuffer);
 
-        const blob = await agent.uploadBlob(imageBuffer, {
+        // Empezamos desde un Buffer de Node
+        let imageBuffer: any = Buffer.from(arrayBuffer);
+
+        // Si supera el límite, comprimimos
+        if (imageBuffer.byteLength > MAX_BSKY_IMAGE_BYTES) {
+          imageBuffer = await compressToSizeLimit(imageBuffer, media.mime);
+        }
+
+        const blobRes = await agent.uploadBlob(new Uint8Array(imageBuffer), {
           encoding: media.mime || "image/jpeg",
         });
 
+        // 👇 AQUÍ: agregamos la imagen al embed
         images.push({
-          image: blob.data.blob,
+          image: blobRes.data.blob,
           alt: post.title || "Post image",
         });
       }
@@ -176,7 +234,8 @@ export async function POST(req: Request) {
         $type: "app.bsky.embed.images",
         images,
       };
-    } else if (mode === "video" && selectedVideo) {
+    }
+    else if (mode === "video" && selectedVideo) {
       // Implementación simple: video como enlace externo
       // (Más adelante se puede migrar a app.bsky.embed.video si quieres soporte nativo)
       const videoUrl = selectedVideo.url.startsWith("http")

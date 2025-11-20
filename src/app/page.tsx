@@ -78,24 +78,23 @@ export default function HomePage() {
           <div>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold ring-1 ring-white/20">
               <span>⚡️ Nuevo</span>
-              <span className="opacity-90">Publica en 4 redes con 1 clic</span>
+              <span className="opacity-90">Publica en 4 redes con 1 click</span>
             </div>
             <h1 className="text-4xl font-black tracking-tight drop-shadow sm:text-6xl">
-              Marketing que enamora. <span className="inline-block bg-white/90 px-2 text-slate-900">Un solo panel</span>,
+              Cuida tus tiempos. <span className="inline-block bg-white/90 px-2 text-slate-900">Un solo panel</span>,
               todas tus redes.
             </h1>
             <p className="mt-5 max-w-xl text-base/7 opacity-95 sm:text-lg/8">
               Ahorra horas cada semana con programación inteligente, publicaciones simultáneas y un flujo simple para equipos. UniPost es tu copiloto de Community Management.
+            </p>
+            <p className="mt-5 max-w-xl text-base/7 opacity-95 sm:text-lg/8">
+              Actualmente con soporte para: <span className="inline-block bg-white/90 px-2 text-slate-900">Instagram Business y Bluesky</span> disponible
             </p>
             <div className="mt-7 flex flex-wrap items-center gap-3">
               <a href="/composer" className="rounded-2xl bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-lg transition hover:translate-y-[-1px] hover:shadow-xl">Probar demo</a>
               <a href="#features" className="rounded-2xl border border-white/30 px-6 py-3 text-base font-semibold backdrop-blur transition hover:bg-white/10">Ver características</a>
             </div>
             <div className="mt-6 flex items-center gap-4 text-xs opacity-90">
-              <div className="flex items-center gap-1"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
-              <span>+300 equipos felices</span>
-              <span>•</span>
-              <span>Setup en 5 minutos</span>
             </div>
           </div>
           <div className="relative">
@@ -110,9 +109,9 @@ export default function HomePage() {
                 <div className="rounded-xl bg-white p-4 text-slate-900">
                   <div className="mb-2 text-xs font-semibold text-indigo-600">Composer</div>
                   <div className="mb-2 text-lg font-bold">Prepara un nuevo Post</div>
-                  <div className="text-sm text-slate-600">Programa y publica en Instagram, Facebook, X y Bluesky al mismo tiempo.</div>
+                  <div className="text-sm text-slate-600">Programa y publica en Instagram, Facebook, Bluesky y TikTok al mismo tiempo.</div>
                   <div className="mt-4 grid grid-cols-4 gap-2 text-xs">
-                    {['IG','FB','X','BS'].map((k)=> (
+                    {["IG","FB","BS", "TT"].map((k)=> (
                       <div key={k} className="rounded-lg bg-slate-100 px-2 py-3 text-center font-semibold">{k}</div>
                     ))}
                   </div>
@@ -121,16 +120,6 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Logos */}
-      <section className="mx-auto max-w-7xl px-6 pb-12">
-        <p className="mb-6 text-center text-sm opacity-90">Confiado por equipos modernos</p>
-        <div className="grid grid-cols-2 place-items-center gap-6 opacity-80 sm:grid-cols-3 md:grid-cols-6">
-          {['Acme','Globex','Umbrella','Soylent','Initech','Stark'].map((n)=> (
-            <div key={n} className="text-sm font-semibold tracking-wide">{n}</div>
-          ))}
         </div>
       </section>
           
@@ -142,9 +131,9 @@ export default function HomePage() {
         <p className="mx-auto mt-2 max-w-2xl text-center text-sm opacity-90">Un flujo simple para crear, programar y publicar sin fricción.</p>
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {[
-            {title:'Publicación multired',desc:'Instagram, Facebook, X y Bluesky con un clic.'},
-            {title:'Programación inteligente',desc:'Ajuste por zona horaria y reintentos automáticos.'},
-            {title:'Roles y equipo',desc:'Colabora con aprobaciones y control de cambios.'},
+            {title:"Publicación multired",desc:"Instagram, Facebook, X y Bluesky con un clic."},
+            {title:"Programación inteligente",desc:"Ajuste por zona horaria y reintentos automáticos."},
+            {title:"Roles y equipo",desc:"Colabora con aprobaciones y control de cambios."},
           ].map((f)=> (
             <div key={f.title} className="rounded-2xl border border-white/20 bg-white/10 p-6 shadow-lg backdrop-blur">
               <div className="mb-3 inline-flex rounded-lg bg-white/20 p-2 ring-1 ring-white/30">
@@ -161,9 +150,9 @@ export default function HomePage() {
       <section id="benefits" className="mx-auto max-w-7xl px-6 pb-16">
         <div className="grid gap-6 md:grid-cols-3">
           {[
-            {kpi:'50%',label:'menos tiempo publicando'},
-            {kpi:'5 min',label:'para tu primer post'},
-            {kpi:'4 redes',label:'con un solo clic'},
+            {kpi:"50%",label:"menos tiempo publicando"},
+            {kpi:"5 min",label:"para tu primer post"},
+            {kpi:"4 redes",label:"con un solo clic"},
           ].map((b)=> (
             <div key={b.kpi} className="rounded-2xl bg-black/20 px-6 py-8 text-center ring-1 ring-white/20">
               <div className="text-4xl font-black">{b.kpi}</div>
@@ -173,7 +162,6 @@ export default function HomePage() {
         </div>
       </section>
     
-
       {/* Pricing teaser */}
       <section id="pricing" className="mx-auto max-w-7xl px-6 pb-20">
         <div className="rounded-3xl bg-white/10 p-8 ring-1 ring-white/20 backdrop-blur">
