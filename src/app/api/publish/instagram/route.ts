@@ -384,16 +384,15 @@ export async function POST(req: Request) {
         }
 
         // Update Variant & Post statuses
-        // Update Variant & Post statuses
         await prisma.$transaction(async (tx) => {
             await tx.variant.update({
                 where: { id: variant.id },
                 data: {
                     status: "PUBLISHED",
-                    uri: finalMediaId ?? undefined, // 👈 store IG media/post ID in Variant.uri
+                    uri: finalMediaId ?? undefined,
+                    permalink: permalink ?? undefined,
                 },
             });
-
             if (post.status !== "PUBLISHED") {
                 await tx.post.update({
                     where: { id: post.id },

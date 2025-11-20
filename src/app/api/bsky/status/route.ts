@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 
+// Checkeo rápido de estado de cuenta (enlazado o no)
+
 export async function GET() {
   const session = await getServerSession();
   if (!session) {

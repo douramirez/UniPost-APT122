@@ -1,6 +1,8 @@
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 
+// Busca credenciales del usuario y las quita de la BD, desenlazando cuenta
+
 export async function DELETE() {
   const session = await getServerSession();
   if (!session) {

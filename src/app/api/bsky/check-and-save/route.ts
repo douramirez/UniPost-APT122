@@ -3,18 +3,19 @@ import { getBskyAgent } from "@/lib/bsky/agent";
 import { prisma } from "@/lib/prisma";
 import { encryptBlueskySecret } from "@/lib/cryptoBluesky";
 
+// Envía credenciales del campo para enlazar cuenta
+// Si la respuesta es válida, se guardan en la base de datos encriptado.
+
 export async function POST(req: Request) {
-  const session = await getServerSession(); // ✅ works without authOptions in your setup
+  const session = await getServerSession(); // No es obligatorio authOptions aquí
   if (!session) {
     return Response.json({ ok: false, error: "No session found" }, { status: 401 });
   }
 
   const { identifier, password } = await req.json();
-  
-  console.log("Trying to login with:", { identifier, password });
-
 
   try {
+    // Llama al agente para que recepcione el DID de Bluesky
     const agent = await getBskyAgent(identifier, password);
     const did = agent.session?.did;
     if (!did) throw new Error("No DID returned from Bluesky");

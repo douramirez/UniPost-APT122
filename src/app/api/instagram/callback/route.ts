@@ -1,5 +1,8 @@
 // src/app/api/instagram/callback/route.ts
 
+// El callback lo utiliza Meta para enviarnos los datos correspondientes (principalmente el Token)
+// que utilizaremos para todo lo que buscamos (Ver perfil, enviar publicaciones, pedir metricas, etc)
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -18,7 +21,7 @@ async function exchangeCodeForShortLivedToken(code: string) {
     );
   }
 
-  // Debug seguro (no imprimas el valor completo del secret)
+  // Debug para verifica que cosas del .env están presentes (solo largos)
   console.log(
     "Instagram OAuth envs:",
     "APP_ID length =", APP_ID.length,
@@ -81,7 +84,7 @@ async function exchangeForLongLivedToken(shortLivedToken: string) {
   };
 }
 
-// 3) Obtiene la cuenta de Instagram Business a partir del token
+// 3) Obtiene la cuenta de Instagram Business a partir del token de larga duración que nos mandó
 async function getInstagramAccount(longLivedToken: string) {
   // 3.1) Listar las páginas asociadas al usuario
   const pagesRes = await fetch(
@@ -152,7 +155,7 @@ async function getInstagramAccount(longLivedToken: string) {
   };
 }
 
-// ✅ Export nombrado GET
+// Export nombrado GET
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
@@ -207,7 +210,7 @@ export async function GET(req: NextRequest) {
         update: {},
         create: {
           userId,
-          redSocial: 2, // 2 = Instagram en tu tabla RedSocial
+          redSocial: 2, // 2, pues en nuestra tabla de redes Instagram es 2
           usuarioRed: username,
           accessToken: longLivedToken,
         },

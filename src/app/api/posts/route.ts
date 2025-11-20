@@ -264,25 +264,35 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
+    const idParam = searchParams.get("id");
 
-    if (!id) {
+    if (!idParam) {
       return NextResponse.json(
         { ok: false, error: "MISSING_ID" },
         { status: 400 }
       );
     }
 
-    // Validar que el post pertenece al usuario
-    const session = await getServerSession();
+    const id = Number(idParam);
+    if (Number.isNaN(id)) {
+      return NextResponse.json(
+        { ok: false, error: "INVALID_ID" },
+        { status: 400 }
+      );
+    }
 
-    await prisma.variant.deleteMany({
-      where: { postId: Number(id) },
-    });
-
-    await prisma.post.delete({
-      where: { id: Number(id) },
-    });
+    // Primero borramos dependencias (Media, Variant), luego el Post
+    await prisma.$transaction([
+      prisma.media.deleteMany({
+        where: { postId: id },
+      }),
+      prisma.variant.deleteMany({
+        where: { postId: id },
+      }),
+      prisma.post.delete({
+        where: { id },
+      }),
+    ]);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

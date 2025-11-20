@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 export type FeedVariant = {
   id: number;
   network: "BLUESKY" | "INSTAGRAM" | "FACEBOOK" | "X" | string;
-  uri: string;
+  uri: string;              // suele ser el ID o URL genérica
+  permalink?: string | null; // 👈 para Instagram, el permalink real
   post?: {
     title?: string | null;
     body?: string | null;
@@ -60,13 +61,25 @@ function BlueskyEmbed({ uri }: { uri: string }) {
   );
 }
 
-function InstagramEmbed({ uri }: { uri: string }) {
+function InstagramEmbed({ permalink }: { permalink: string }) {
+  // Para el feed, asumimos que `permalink` ya es la URL completa de Instagram:
+  //   e.g. "https://www.instagram.com/p/XXXXXXXX/"
   return (
-    <iframe
-      src={uri}
-      className="h-[380px] w-full rounded-xl border border-white/20 bg-black/40"
-      loading="lazy"
-    />
+    <blockquote
+      className="instagram-media w-full rounded-xl border border-white/20 bg-black/40"
+      data-instgrm-permalink={permalink}
+      data-instgrm-version="14"
+      style={{ margin: 0 }}
+    >
+      <a
+        href={permalink}
+        target="_blank"
+        rel="noreferrer"
+        className="block p-3 text-center text-xs underline"
+      >
+        Ver publicación en Instagram
+      </a>
+    </blockquote>
   );
 }
 
@@ -97,8 +110,11 @@ function renderEmbed(v: FeedVariant) {
     case "BLUESKY":
       return <BlueskyEmbed uri={v.uri} />;
 
-    case "INSTAGRAM":
-      return <InstagramEmbed uri={v.uri} />;
+    case "INSTAGRAM": {
+      // 👇 Usamos el permalink si existe; si no, caemos a uri por compatibilidad
+      const permalink = v.permalink ?? v.uri;
+      return <InstagramEmbed permalink={permalink} />;
+    }
 
     case "X":
       return <XEmbed uri={v.uri} />;
@@ -172,6 +188,37 @@ export function PublicFeed() {
       document.body.removeChild(script);
     };
   }, [items.length]);
+
+  // Load Instagram embed script when there are Instagram posts
+  useEffect(() => {
+    if (!items.some((i) => i.network === "INSTAGRAM")) return;
+
+    // If script already exists, solo re-procesa los embeds
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-instgrm-script="true"]'
+    );
+    if (existing) {
+      (window as any).instgrm?.Embeds?.process();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://www.instagram.com/embed.js";
+    script.async = true;
+    script.defer = true;
+    script.setAttribute("data-instgrm-script", "true");
+    script.onload = () => {
+      (window as any).instgrm?.Embeds?.process();
+    };
+
+    document.body.appendChild(script);
+
+    return () => {
+      // Normalmente no quitamos el script de Instagram para evitar recargas,
+      // pero si quieres limpiarlo al desmontar, puedes descomentar:
+      // document.body.removeChild(script);
+    };
+  }, [items]);
 
   return (
     <section className="mx-auto max-w-7xl px-6 pb-20">

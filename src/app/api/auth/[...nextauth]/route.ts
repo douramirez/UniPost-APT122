@@ -6,7 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
-// ✅ Exported config so we can reuse it with getServerSession
+// Exportamos configuración para poder reutilizarlo despues con getServerSession
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [

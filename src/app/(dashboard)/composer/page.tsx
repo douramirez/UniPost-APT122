@@ -9,13 +9,12 @@ export default function Page() {
   const router = useRouter();
 
   if (status === "loading") {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white text-lg">
-      Verificando sesión...
-    </div>
-  );
-}
-
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white text-lg">
+        Verificando sesión...
+      </div>
+    );
+  }
 
   if (!session) {
     router.push("/login");

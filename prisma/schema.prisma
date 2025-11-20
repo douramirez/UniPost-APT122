@@ -75,6 +75,7 @@ model Variant {
   date_sent DateTime? @db.Date
   time_sent DateTime? @db.Time(6)
   uri       String?
+  permalink String?
   post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 

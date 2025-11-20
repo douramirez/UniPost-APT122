@@ -13,7 +13,7 @@ export async function GET() {
   }
 
   try {
-    // 1. User
+    // 1. Traemos los datos que utilizaremos del usuario
     const user = await prisma.user.findUnique({
       where: { email: session.user?.email ?? "" },
     });
@@ -25,7 +25,7 @@ export async function GET() {
       );
     }
 
-    // 2. Bluesky access
+    // 2. Acceso con credenciales a BlueSky (solo ID del usuario)
     const access = await prisma.blueSky_Access.findFirst({
       where: { usuarioId: user.id },
     });
@@ -40,7 +40,7 @@ export async function GET() {
 
     const decryptedPassword = decryptBlueskySecret(access.appPassword);
 
-    // 3. All BLUESKY variants with URI
+    // 3. Todas las variantes de Bluesky que tengan un URI válido
     const variants = await prisma.variant.findMany({
       where: {
         network: "BLUESKY",
@@ -60,7 +60,7 @@ export async function GET() {
 
     const uris = variants.map((v) => v.uri!) as string[];
 
-    // 4. Login to Bluesky
+    // 4. Login a Bluesky
     const agent = new AtpAgent({ service: "https://bsky.social" });
       await agent.login({
         identifier: access.nombreUsuario,
@@ -91,7 +91,7 @@ export async function GET() {
         replies: p.replyCount ?? 0,
         reposts: p.repostCount ?? 0,
         quotes: (p as any).quoteCount ?? 0,
-        // Bluesky does NOT currently provide views/impressions
+        // Bluesky no almacena vistas de un post
         views: null,
         postTitle: v?.post?.title ?? "",
       };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import { useSession, signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 
@@ -32,13 +32,15 @@ type Post = {
 };
 
 type NewMedia = {
-  id: string;          // client-side uuid
+  id: string; // client-side uuid
   file: File;
-  previewUrl: string;  // object URL for <img>/<video>
-  base64: string;      // to send to API
+  previewUrl: string; // object URL for <img>/<video>
+  base64: string; // to send to API
   type: "image" | "video";
-  order: number;       // position in carousel (0-based)
+  order: number; // position in carousel (0-based)
 };
+
+const ALL_NETWORKS = ["INSTAGRAM", "BLUESKY"] as const;
 
 export default function ComposerPage() {
   const { data: session } = useSession();
@@ -52,11 +54,15 @@ export default function ComposerPage() {
   const [loading, setLoading] = useState(false);
   const [medias, setMedias] = useState<NewMedia[]>([]);
 
+  // Per-post media index for the existing posts carousel
+  const [postMediaIndex, setPostMediaIndex] = useState<{
+    [postId: number]: number;
+  }>({});
+
   // 🕒 Campos para agendar
   const [agendar, setAgendar] = useState(false);
   const [zona, setZona] = useState("GMT -3");
   const [hora, setHora] = useState("14:30");
-
 
   useEffect(() => {
     fetchPosts();
@@ -203,7 +209,7 @@ export default function ComposerPage() {
         .sort((a, b) => a.order - b.order)
         .map((m) => ({
           base64: m.base64,
-          type: m.type,   // "image" | "video"
+          type: m.type, // "image" | "video"
           order: m.order, // 0-based position in carousel
         })),
       schedule: agendar ? { runAt: hora, timezone: zona } : null,
@@ -221,8 +227,10 @@ export default function ComposerPage() {
       toast.success("✅ Publicación creada con éxito");
       setTitle("");
       setBody("");
-      setMedias([]);       // 🔄 limpiar lista de medias
+      setMedias([]); // 🔄 limpiar lista de medias
       setAgendar(false);
+      // 🔄 resetear variantes a estado inicial
+      setVariants([{ network: "INSTAGRAM", text: "" }]);
       fetchPosts();
     } else {
       toast.error("❌ Error al crear la publicación");
@@ -266,19 +274,93 @@ export default function ComposerPage() {
     }
   };
 
+  const handleVariantTextChange = (
+    index: number,
+    e: ChangeEvent<HTMLTextAreaElement>
+  ) => {
+    const newVariants = [...variants];
+    newVariants[index].text = e.target.value;
+    setVariants(newVariants);
+
+    // Auto-grow textarea
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // Editar texto de variantes de publicaciones existentes (no publicado)
+  const handleExistingVariantTextChange = (
+    postId: number,
+    variantId: number | undefined,
+    newText: string
+  ) => {
+    if (!variantId) return;
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? {
+            ...post,
+            variants: post.variants.map((v) =>
+              v.id === variantId ? { ...v, text: newText } : v
+            ),
+          }
+          : post
+      )
+    );
+    // Nota: aquí solo actualizamos frontend; luego podemos conectar a un endpoint de actualización.
+  };
+
+  const usedNetworks = variants.map((v) => v.network);
+  const availableNetworks = ALL_NETWORKS.filter(
+    (net) => !usedNetworks.includes(net)
+  );
+
+  const movePostMedia = (
+    postId: number,
+    direction: "left" | "right",
+    total: number
+  ) => {
+    setPostMediaIndex((prev) => {
+      const current = prev[postId] ?? 0;
+      let next =
+        direction === "left" ? current - 1 : current + 1;
+      if (next < 0) next = 0;
+      if (next >= total) next = total - 1;
+      return { ...prev, [postId]: next };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white py-10 px-6">
       <div className="max-w-5xl mx-auto">
         {session && (
           <>
             <p className="text-center text-lg text-white mb-4">
-              👋 Hola, <span className="font-semibold">{session.user?.name || session.user?.email}</span>
+              👋 Hola,{" "}
+              <span className="font-semibold">
+                {session.user?.name || session.user?.email}
+              </span>
             </p>
 
             <div className="flex justify-center mb-6 gap-4">
-              <a href="/perfil" className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition">Ver perfil</a>
-              <a href="/metricas" className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition">Ver métricas</a>
-              <button onClick={() => signOut({ callbackUrl: "/" })} className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition">Cerrar sesión</button>
+              <a
+                href="/perfil"
+                className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition"
+              >
+                Ver perfil
+              </a>
+              <a
+                href="/metricas"
+                className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition"
+              >
+                Ver métricas
+              </a>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="text-sm bg-white/20 px-4 py-2 rounded-lg hover:bg-white/30 transition"
+              >
+                Cerrar sesión
+              </button>
             </div>
           </>
         )}
@@ -308,7 +390,9 @@ export default function ComposerPage() {
 
             {/* 📎 Adjuntar imagen o video */}
             <div>
-              <label className="block text-sm mb-2 text-gray-200">📎 Adjuntar imagen o video</label>
+              <label className="block text-sm mb-2 text-gray-200">
+                📎 Adjuntar imagen o video
+              </label>
               <input
                 type="file"
                 accept="image/*,video/*"
@@ -389,20 +473,16 @@ export default function ComposerPage() {
                   className="p-3 bg-white/10 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-purple-300"
                 >
                   <option>INSTAGRAM</option>
-                  <option>FACEBOOK</option>
-                  <option>X</option>
                   <option>BLUESKY</option>
                 </select>
 
-                <input
+                <textarea
                   value={v.text}
-                  onChange={(e) => {
-                    const copy = [...variants];
-                    copy[i].text = e.target.value;
-                    setVariants(copy);
-                  }}
+                  onChange={(e) => handleVariantTextChange(i, e)}
                   placeholder="Texto del post"
-                  className="flex-1 p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300"
+                  rows={1}
+                  data-variant-textarea="true"
+                  className="flex-1 p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300 resize-none overflow-hidden leading-relaxed"
                 />
 
                 {variants.length > 1 && (
@@ -418,43 +498,47 @@ export default function ComposerPage() {
             ))}
 
             {/* 🟩 Selector para nueva red */}
-            <div className="flex gap-3 items-center">
-              <select
-                id="newNetwork"
-                className="p-3 bg-white/30 border border-white/40 text-gray-900 rounded-lg font-semibold focus:ring-2 focus:ring-purple-400" defaultValue=""
-              >
-                <option value="" disabled>
-                  Selecciona una red
-                </option>
-                {["INSTAGRAM", "FACEBOOK", "X", "LINKEDIN", "BLUESKY"].map((r) => (
-                  <option
-                    key={r}
-                    value={r}
-                    disabled={variants.some((v) => v.network === r)}
-                  >
-                    {r}
+            {availableNetworks.length > 0 && (
+              <div className="flex gap-3 items-center">
+                <select
+                  id="newNetwork"
+                  className="p-3 bg-white/30 border border-white/40 text-white rounded-lg focus:ring-2 focus:ring-purple-400"
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Selecciona una red
                   </option>
-                ))}
-              </select>
+                  {availableNetworks.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const select = document.getElementById(
+                      "newNetwork"
+                    ) as HTMLSelectElement;
+                    const selected = select.value;
+                    if (!selected) return;
+                    if (variants.some((v) => v.network === selected)) {
+                      toast.error("⚠️ Esa red ya fue agregada");
+                      return;
+                    }
+                    setVariants([
+                      ...variants,
+                      { network: selected, text: "" },
+                    ]);
+                    select.value = "";
+                  }}
+                  className="bg-green-400 hover:bg-green-500 px-4 py-2 rounded-lg text-black font-semibold"
+                >
+                  Agregar
+                </button>
+              </div>
+            )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  const select = document.getElementById("newNetwork") as HTMLSelectElement;
-                  const selected = select.value;
-                  if (!selected) return;
-                  if (variants.some((v) => v.network === selected)) {
-                    toast.error("⚠️ Esa red ya fue agregada");
-                    return;
-                  }
-                  setVariants([...variants, { network: selected, text: "" }]);
-                  select.value = "";
-                }}
-                className="bg-green-400 hover:bg-green-500 px-4 py-2 rounded-lg text-black font-semibold"
-              >
-                Agregar
-              </button>
-            </div>
             {/* 🕒 Agendar publicación */}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2">
@@ -501,15 +585,29 @@ export default function ComposerPage() {
             </button>
           </form>
         </div>
+
         {/* 📋 Publicaciones existentes */}
         <div className="space-y-6 mt-10">
-          <h2 className="text-2xl font-semibold mb-4 text-white/90">📋 Publicaciones existentes</h2>
+          <h2 className="text-2xl font-semibold mb-4 text-white/90">
+            📋 Publicaciones existentes
+          </h2>
           {posts.length === 0 ? (
             <p className="text-white/70">No hay publicaciones aún.</p>
           ) : (
             posts.map((p) => {
-              const firstMedia =
-                p.medias && p.medias.length > 0 ? p.medias[0] : null;
+              const mediaList = p.medias || [];
+              const totalMedia = mediaList.length;
+              const currentIndex =
+                postMediaIndex[p.id] ?? 0;
+              const currentMedia =
+                totalMedia > 0
+                  ? mediaList[
+                  Math.min(
+                    Math.max(currentIndex, 0),
+                    totalMedia - 1
+                  )
+                  ]
+                  : null;
 
               return (
                 <div
@@ -517,38 +615,86 @@ export default function ComposerPage() {
                   className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-xl shadow-lg"
                 >
                   <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-xl font-bold">{p.title}</h3>
+                    <h3 className="text-xl font-bold">
+                      {p.title}
+                    </h3>
                     <span
                       className={`text-sm px-3 py-1 rounded-full ${p.status === "PUBLISHED"
-                        ? "bg-green-500/10 text-green-300 border border-green-500/30"
-                        : "bg-gray-500/10 text-gray-300 border border-gray-500/30"
+                          ? "bg-green-500/10 text-green-300 border border-green-500/30"
+                          : "bg-gray-500/10 text-gray-300 border border-gray-500/30"
                         }`}
                     >
                       {p.status}
                     </span>
                   </div>
-                  <p className="text-white/80 mb-4">{p.body}</p>
-                  {firstMedia && (
-                    <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex justify-center">
-                      {firstMedia.type === "VIDEO" || firstMedia.mime.startsWith("video") ? (
+                  <p className="text-white/80 mb-4">
+                    {p.body}
+                  </p>
+
+                  {/* Carrusel de medias */}
+                  {currentMedia && (
+                    <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex flex-col items-center">
+                      {currentMedia.type === "VIDEO" ||
+                        currentMedia.mime.startsWith("video") ? (
                         <video
-                          src={firstMedia.url}
+                          src={currentMedia.mediaLocation}
                           controls
                           className="max-h-[250px] rounded-lg object-contain shadow-lg"
                         />
                       ) : (
                         <img
-                          src={firstMedia.url}
+                          src={currentMedia.mediaLocation}
                           alt="media"
                           className="max-h-[250px] w-auto rounded-lg object-contain shadow-lg"
                         />
                       )}
+                      {totalMedia > 1 && (
+                        <div className="flex items-center gap-3 mt-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              movePostMedia(
+                                p.id,
+                                "left",
+                                totalMedia
+                              )
+                            }
+                            disabled={
+                              (postMediaIndex[p.id] ?? 0) === 0
+                            }
+                            className="px-2 py-1 text-xs rounded bg-white/10 disabled:opacity-40"
+                          >
+                            ◀
+                          </button>
+                          <span className="text-xs text-gray-200">
+                            {currentIndex + 1} / {totalMedia}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              movePostMedia(
+                                p.id,
+                                "right",
+                                totalMedia
+                              )
+                            }
+                            disabled={
+                              (postMediaIndex[p.id] ?? 0) ===
+                              totalMedia - 1
+                            }
+                            className="px-2 py-1 text-xs rounded bg-white/10 disabled:opacity-40"
+                          >
+                            ▶
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
-                  {!firstMedia && p.mediaBase64 && (
-                    // fallback for very old posts while you migrate
+
+                  {/* fallback para posts viejos con mediaBase64 */}
+                  {!currentMedia && p.mediaBase64 && (
                     <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex justify-center">
-                      {p.mediaBase64.startsWith("data:video") ? (
+                      {isVideoBase64(p.mediaBase64) ? (
                         <video
                           src={p.mediaBase64}
                           controls
@@ -563,6 +709,7 @@ export default function ComposerPage() {
                       )}
                     </div>
                   )}
+
                   {/* Redes asociadas */}
                   <div className="space-y-3 mt-4">
                     {p.variants.map((v, i) => (
@@ -570,23 +717,57 @@ export default function ComposerPage() {
                         key={i}
                         className="flex justify-between items-center bg-white/5 border border-white/10 p-3 rounded-lg transition-all duration-200 hover:bg-white/10"
                       >
-                        <div>
-                          <p className="font-semibold">{v.network}</p>
-                          <p className="text-sm text-gray-200">{v.text}</p>
-                          <p className="text-xs text-gray-400">Estado: {v.status ?? "DRAFT"}</p>
+                        <div className="flex-1 mr-4">
+                          <p className="font-semibold">
+                            {v.network}
+                          </p>
+                          {v.status !== "PUBLISHED" ? (
+                            <textarea
+                              value={v.text}
+                              onChange={(e) =>
+                                handleExistingVariantTextChange(
+                                  p.id,
+                                  v.id,
+                                  e.target.value
+                                )
+                              }
+                              className="mt-1 w-full text-sm text-gray-100 bg-white/5 border border-white/10 rounded-lg p-2 resize-none"
+                              rows={2}
+                              placeholder="Texto del post"
+                            />
+                          ) : (
+                            <p className="text-sm text-gray-200 mt-1 whitespace-pre-line">
+                              {v.text}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-1">
+                            Estado: {v.status ?? "DRAFT"}
+                          </p>
                         </div>
 
                         {v.network === "BLUESKY" && (
                           <button
                             onClick={async () => {
-                              const res = await fetch("/api/publish/bluesky", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ postId: p.id, variantId: v.id }),
-                              });
+                              const res =
+                                await fetch(
+                                  "/api/publish/bluesky",
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type":
+                                        "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      postId: p.id,
+                                      variantId: v.id,
+                                    }),
+                                  }
+                                );
                               const data = await res.json();
                               if (data.ok) {
-                                toast.success("Publicado en Bluesky ✅");
+                                toast.success(
+                                  "Publicado en Bluesky ✅"
+                                );
 
                                 // 🔄 update local state without refresh
                                 setPosts((prev) =>
@@ -594,76 +775,123 @@ export default function ComposerPage() {
                                     post.id === p.id
                                       ? {
                                         ...post,
-                                        variants: post.variants.map((varr) =>
-                                          varr.id === v.id
-                                            ? { ...varr, status: "PUBLISHED", bskyUri: data.uri }
-                                            : varr
-                                        ),
+                                        variants:
+                                          post.variants.map(
+                                            (varr) =>
+                                              varr.id ===
+                                                v.id
+                                                ? {
+                                                  ...varr,
+                                                  status:
+                                                    "PUBLISHED",
+                                                  bskyUri:
+                                                    data.uri,
+                                                }
+                                                : varr
+                                          ),
                                       }
                                       : post
                                   )
                                 );
                               } else {
-                                toast.error("Error al publicar: " + data.error);
+                                toast.error(
+                                  "Error al publicar: " +
+                                  data.error
+                                );
                               }
                             }}
-                            disabled={v.status === "PUBLISHED"}
+                            disabled={
+                              v.status === "PUBLISHED"
+                            }
                             className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${v.status === "PUBLISHED"
-                              ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
-                              : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
+                                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
+                                : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
                               }`}
                           >
-                            {v.status === "PUBLISHED" ? "Publicado ✅" : "Publicar"}
+                            {v.status === "PUBLISHED"
+                              ? "Publicado ✅"
+                              : "Publicar"}
                           </button>
                         )}
                         {v.network === "INSTAGRAM" && (
                           <button
                             onClick={async () => {
-                              const res = await fetch("/api/publish/instagram", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ postId: p.id, variantId: v.id }),
-                              });
+                              const res =
+                                await fetch(
+                                  "/api/publish/instagram",
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type":
+                                        "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      postId: p.id,
+                                      variantId: v.id,
+                                    }),
+                                  }
+                                );
                               const data = await res.json();
 
-                              console.log("📌 IG publish response:", data);
+                              console.log(
+                                "📌 IG publish response:",
+                                data
+                              );
 
                               if (!data.ok) {
-                                toast.error("Error al publicar en Instagram: " + data.error);
+                                toast.error(
+                                  "Error al publicar en Instagram: " +
+                                  data.error
+                                );
                               }
                               if (data.ok) {
-                                toast.success("Publicado en Instagram ✅");
+                                toast.success(
+                                  "Publicado en Instagram ✅"
+                                );
 
                                 setPosts((prev) =>
                                   prev.map((post) =>
                                     post.id === p.id
                                       ? {
                                         ...post,
-                                        variants: post.variants.map((varr) =>
-                                          varr.id === v.id
-                                            ? {
-                                              ...varr,
-                                              status: "PUBLISHED",
-                                              uri: data.uri ?? data.mediaId ?? varr.uri,
-                                            }
-                                            : varr
-                                        ),
+                                        variants:
+                                          post.variants.map(
+                                            (varr) =>
+                                              varr.id ===
+                                                v.id
+                                                ? {
+                                                  ...varr,
+                                                  status:
+                                                    "PUBLISHED",
+                                                  uri:
+                                                    data.uri ??
+                                                    data.mediaId ??
+                                                    varr.uri,
+                                                }
+                                                : varr
+                                          ),
                                       }
                                       : post
                                   )
                                 );
-                              }
-                              else {
-                                toast.error("Error al publicar en Instagram: " + data.error);
+                              } else {
+                                toast.error(
+                                  "Error al publicar en Instagram: " +
+                                  data.error
+                                );
                               }
                             }}
-                            disabled={v.status === "PUBLISHED"}
+                            disabled={
+                              v.status === "PUBLISHED"
+                            }
                             className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${v.status === "PUBLISHED"
-                              ? "bg-gradient-to-r from-pink-500 to-rose-600 text-white cursor-default"
-                              : "bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white active:scale-95"
+                                ? "bg-gradient-to-r from-pink-500 to-rose-600 text-white cursor-default"
+                                : "bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white active:scale-95"
                               }`}
                           >
-                            {v.status === "PUBLISHED" ? "Publicado ✅" : "Publicar"}
+                            {v.status === "PUBLISHED"
+                              ? "Publicado ✅"
+                              : "Publicar"}
                           </button>
                         )}
                       </div>

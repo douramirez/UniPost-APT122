@@ -7,7 +7,6 @@ import { prisma } from "@/lib/prisma";
 const FB_VERSION = process.env.FACEBOOK_API_VERSION ?? "v21.0";
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID!;
 const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI!;
-// Ejemplo: "https://tusitio.com/api/instagram/callback"
 
 export async function GET() {
   const session = await auth();
@@ -28,13 +27,16 @@ export async function GET() {
     return NextResponse.redirect(signInUrl.toString());
   }
 
-  // Usamos el id de la base de datos como "state" (puedes firmarlo si quieres)
+  // Usamos el id de la base de datos como "state"
   const state = encodeURIComponent(String(user.id));
 
   const url = new URL(`https://www.facebook.com/${FB_VERSION}/dialog/oauth`);
   url.searchParams.set("client_id", INSTAGRAM_APP_ID);
   url.searchParams.set("redirect_uri", INSTAGRAM_REDIRECT_URI);
   url.searchParams.set("scope",
+    // Aquí definimos todos los permisos necesarios que solicitaremos a Meta cuando enlazemos cuentas
+    // Probablemente se necesite extender para satisfacer otros requisitos. Si se actualiza
+    // Es necesario volver a enlazar la cuenta (pues el Token define que permisos tenemos)
   [
     "instagram_basic",
     "instagram_content_publish",

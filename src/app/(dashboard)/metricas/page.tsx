@@ -12,7 +12,7 @@ import {
 
 type Metric = {
   id: number | string;
-  network: string;
+  network: "BLUESKY" | "INSTAGRAM";
   likes: number;
   comments: number;
   shares: number;
@@ -41,12 +41,41 @@ type BskyPostMetric = {
   postTitle?: string;
 };
 
+type InstagramProfile = {
+  username: string;
+  name: string | null;
+  profilePictureUrl: string | null;
+  followers: number | null;
+  follows: number | null;
+  mediaCount: number | null;
+};
+
+type InstagramPostMetric = {
+  id: string;
+  caption: string | null;
+  likeCount: number;
+  commentsCount: number;
+  shares: number;
+  views: number | null;
+  createdAt: string | null;
+  postTitle?: string;
+};
+
+type TabKey = "GENERAL" | "BLUESKY" | "INSTAGRAM";
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metric[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<BskyProfile | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [bskyProfile, setBskyProfile] = useState<BskyProfile | null>(null);
+  const [loadingBskyProfile, setLoadingBskyProfile] = useState(true);
+
+  const [igProfile, setIgProfile] = useState<InstagramProfile | null>(null);
+  const [loadingIgProfile, setLoadingIgProfile] = useState(true);
+  const [igError, setIgError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<TabKey>("GENERAL");
 
   // Load Bluesky profile stats
   useEffect(() => {
@@ -55,50 +84,109 @@ export default function DashboardPage() {
         const res = await fetch("/api/bsky/profile");
         const data = await res.json();
         if (data.ok) {
-          setProfile(data.profile);
+          setBskyProfile(data.profile);
         }
       } catch (e) {
         console.error(e);
       } finally {
-        setLoadingProfile(false);
+        setLoadingBskyProfile(false);
       }
     })();
   }, []);
 
-  // Load Bluesky post metrics
+  // Load Instagram profile stats
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/bsky/metrics");
+        const res = await fetch("/api/instagram/profile");
         const data = await res.json();
+        if (data.ok) {
+          setIgProfile(data.profile);
+        } else {
+          setIgError(data.error ?? "No se pudo cargar el perfil de Instagram");
+        }
+      } catch (e) {
+        console.error(e);
+        setIgError("Error al cargar el perfil de Instagram");
+      } finally {
+        setLoadingIgProfile(false);
+      }
+    })();
+  }, []);
 
-        if (!data.ok) {
-          setError(data.error || "No se pudieron cargar las métricas");
-          return;
+  // Load Bluesky + Instagram post metrics
+  useEffect(() => {
+    (async () => {
+      try {
+        const allMetrics: Metric[] = [];
+
+        // BLUESKY
+        const resBsky = await fetch("/api/bsky/metrics");
+        const dataBsky = await resBsky.json();
+
+        if (!dataBsky.ok) {
+          setError(dataBsky.error || "No se pudieron cargar las métricas de Bluesky");
+        } else {
+          const mappedBsky: Metric[] = (dataBsky.posts as BskyPostMetric[]).map(
+            (p, idx) => ({
+              id: `bsky-${idx}`,
+              network: "BLUESKY",
+              likes: p.likes,
+              comments: p.replies,
+              shares: p.reposts,
+              impressions: p.views, // null por ahora (Bluesky no expone views reales)
+              collectedAt: p.createdAt,
+              post: {
+                title: p.postTitle && p.postTitle.trim().length
+                  ? p.postTitle
+                  : p.text
+                  ? p.text.slice(0, 50) + (p.text.length > 50 ? "…" : "")
+                  : "(sin título)",
+                text: p.text,
+              },
+            })
+          );
+
+          allMetrics.push(...mappedBsky);
         }
 
-        // Mapear respuesta de Bluesky → modelo de la tabla/gráfico
-        const mapped: Metric[] = (data.posts as BskyPostMetric[]).map(
-          (p, idx) => ({
-            id: idx,
-            network: "BLUESKY",
-            likes: p.likes,
-            comments: p.replies,
-            shares: p.reposts,
-            impressions: p.views, // null por ahora (Bluesky no expone views)
-            collectedAt: p.createdAt,
-            post: {
-              title: p.postTitle && p.postTitle.trim().length
-                ? p.postTitle
-                : p.text
-                ? p.text.slice(0, 50) + (p.text.length > 50 ? "…" : "")
-                : "(sin título)",
-              text: p.text,
-            },
-          })
-        );
+        // INSTAGRAM
+        try {
+          const resIg = await fetch("/api/instagram/metrics");
+          const dataIg = await resIg.json();
 
-        setMetrics(mapped);
+          if (dataIg.ok && Array.isArray(dataIg.posts)) {
+            const mappedIg: Metric[] = (dataIg.posts as InstagramPostMetric[]).map(
+              (p, idx) => ({
+                id: `ig-${idx}`,
+                network: "INSTAGRAM",
+                likes: p.likeCount,
+                comments: p.commentsCount,
+                shares: p.shares,
+                impressions: p.views,
+                collectedAt: p.createdAt,
+                post: {
+                  title:
+                    p.postTitle && p.postTitle.trim().length
+                      ? p.postTitle
+                      : p.caption
+                      ? p.caption.slice(0, 50) +
+                        (p.caption.length > 50 ? "…" : "")
+                      : "(sin título)",
+                  text: p.caption ?? undefined,
+                },
+              })
+            );
+            allMetrics.push(...mappedIg);
+          } else if (!dataIg.ok) {
+            // No matamos todo el dashboard si falla IG, solo anotamos error
+            console.error("Error métricas IG:", dataIg.error);
+          }
+        } catch (e) {
+          console.error("Error al cargar métricas de Instagram:", e);
+        }
+
+        setMetrics(allMetrics);
       } catch (e: any) {
         console.error(e);
         setError(e.message ?? "Error desconocido");
@@ -108,9 +196,14 @@ export default function DashboardPage() {
     })();
   }, []);
 
-  // Agrupar likes por red para el gráfico (ahora solo BLUESKY, pero es escalable)
+  // Datos filtrados según pestaña
+  const filteredMetrics =
+    activeTab === "GENERAL"
+      ? metrics
+      : metrics.filter((m) => m.network === activeTab);
+
   const chartData = Object.values(
-    metrics.reduce((acc: any, m) => {
+    filteredMetrics.reduce((acc: any, m) => {
       if (!acc[m.network])
         acc[m.network] = {
           network: m.network,
@@ -131,32 +224,36 @@ export default function DashboardPage() {
         📈 Dashboard de Métricas
       </h1>
 
-      {/* Header con perfil de Bluesky */}
-      <div className="max-w-4xl mx-auto mb-8">
-        <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center gap-4">
-          {loadingProfile ? (
+      {/* Header con perfiles de Bluesky e Instagram */}
+      <div className="max-w-5xl mx-auto mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Bluesky */}
+        <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg flex items-center gap-4">
+          {loadingBskyProfile ? (
             <p className="text-white/70 text-sm">Cargando perfil de Bluesky…</p>
-          ) : profile ? (
+          ) : bskyProfile ? (
             <>
-              {profile.avatar && (
+              {bskyProfile.avatar && (
                 <img
-                  src={profile.avatar}
-                  alt="avatar"
+                  src={bskyProfile.avatar}
+                  alt="avatar bluesky"
                   className="w-16 h-16 rounded-full border border-white/30"
                 />
               )}
-              <div className="flex-1 text-center sm:text-left">
-                <p className="text-lg font-semibold">
-                  {profile.displayName ?? profile.handle}
+              <div className="flex-1">
+                <p className="text-sm uppercase tracking-wide text-white/50">
+                  Bluesky
                 </p>
-                <p className="text-white/70 text-sm">@{profile.handle}</p>
-                <div className="flex justify-center sm:justify-start gap-6 mt-2 text-sm">
+                <p className="text-lg font-semibold">
+                  {bskyProfile.displayName ?? bskyProfile.handle}
+                </p>
+                <p className="text-white/70 text-sm">@{bskyProfile.handle}</p>
+                <div className="flex gap-6 mt-2 text-sm">
                   <div>
-                    <p className="font-bold">{profile.followers}</p>
+                    <p className="font-bold">{bskyProfile.followers}</p>
                     <p className="text-white/60 text-xs">Seguidores</p>
                   </div>
                   <div>
-                    <p className="font-bold">{profile.posts}</p>
+                    <p className="font-bold">{bskyProfile.posts}</p>
                     <p className="text-white/60 text-xs">Posts</p>
                   </div>
                 </div>
@@ -169,23 +266,97 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
+
+        {/* Instagram */}
+        <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg flex items-center gap-4">
+          {loadingIgProfile ? (
+            <p className="text-white/70 text-sm">
+              Cargando perfil de Instagram…
+            </p>
+          ) : igProfile ? (
+            <>
+              {igProfile.profilePictureUrl && (
+                <img
+                  src={igProfile.profilePictureUrl}
+                  alt="avatar instagram"
+                  className="w-16 h-16 rounded-full border border-white/30"
+                />
+              )}
+              <div className="flex-1">
+                <p className="text-sm uppercase tracking-wide text-white/50">
+                  Instagram
+                </p>
+                <p className="text-lg font-semibold">
+                  {igProfile.name ?? igProfile.username}
+                </p>
+                <p className="text-white/70 text-sm">@{igProfile.username}</p>
+                <div className="flex gap-6 mt-2 text-sm">
+                  <div>
+                    <p className="font-bold">
+                      {igProfile.followers ?? "—"}
+                    </p>
+                    <p className="text-white/60 text-xs">Seguidores</p>
+                  </div>
+                  <div>
+                    <p className="font-bold">{igProfile.mediaCount ?? "—"}</p>
+                    <p className="text-white/60 text-xs">Publicaciones</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : igError ? (
+            <p className="text-red-200 text-sm">{igError}</p>
+          ) : (
+            <p className="text-red-200 text-sm">
+              No se pudo cargar el perfil de Instagram (¿está vinculada la
+              cuenta?).
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs General / Bluesky / Instagram */}
+      <div className="max-w-6xl mx-auto mb-6 flex justify-center gap-3">
+        {(["GENERAL", "BLUESKY", "INSTAGRAM"] as TabKey[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 rounded-full text-sm font-semibold border transition ${
+              activeTab === tab
+                ? "bg-white text-purple-700 border-white"
+                : "bg-white/10 border-white/30 text-white/80 hover:bg-white/20"
+            }`}
+          >
+            {tab === "GENERAL"
+              ? "General"
+              : tab === "BLUESKY"
+              ? "Bluesky"
+              : "Instagram"}
+          </button>
+        ))}
       </div>
 
       {loading ? (
         <p className="text-center text-gray-200">Cargando métricas…</p>
-      ) : error ? (
+      ) : error && activeTab === "BLUESKY" ? (
         <p className="text-center text-red-200">{error}</p>
       ) : (
         <div className="max-w-6xl mx-auto space-y-10">
           {/* Tabla de métricas */}
           <div className="overflow-x-auto backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg">
             <h2 className="text-2xl font-semibold mb-4">
-              📋 Detalle de publicaciones
+              📋 Detalle de publicaciones{" "}
+              {activeTab === "GENERAL"
+                ? "(todas las redes)"
+                : activeTab === "BLUESKY"
+                ? "(Bluesky)"
+                : "(Instagram)"}
             </h2>
             <table className="w-full text-sm text-left text-white/90">
               <thead>
                 <tr className="border-b border-white/30 text-white/80">
-                  <th className="py-2">Publicación</th>
+                  <th className="py-2">Red</th>
+                  <th>Publicación</th>
                   <th>❤️ Likes</th>
                   <th>💬 Comentarios</th>
                   <th>🔁 Shares</th>
@@ -194,11 +365,14 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {metrics.map((m) => (
+                {filteredMetrics.map((m) => (
                   <tr
                     key={m.id}
                     className="border-b border-white/10 hover:bg-white/5"
                   >
+                    <td className="py-2 align-top text-xs">
+                      {m.network === "BLUESKY" ? "Bluesky" : "Instagram"}
+                    </td>
                     <td className="py-2 align-top">
                       <p className="font-semibold">{m.post.title}</p>
                       {m.post.text && (
@@ -239,7 +413,11 @@ export default function DashboardPage() {
                     }}
                     cursor={{ fill: "rgba(255,255,255,0.1)" }}
                   />
-                  <Bar dataKey="likes" fill="#ffb6ff" radius={[6, 6, 0, 0]} />
+                  <Bar
+                    dataKey="likes"
+                    fill="#ffb6ff"
+                    radius={[6, 6, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>

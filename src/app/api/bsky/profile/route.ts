@@ -9,13 +9,13 @@ export async function GET() {
     return Response.json({ ok: false, error: "Not authenticated" }, { status: 401 });
 
   try {
-    // 1. Get user
+    // 1. Conseguir el usuario
     const user = await prisma.user.findUnique({
       where: { email: session.user?.email ?? "" },
     });
     if (!user) throw new Error("User not found");
 
-    // 2. Get Bluesky access
+    // 2. Con la ID del usuario, encontrar las credenciales para Bluesky
     const access = await prisma.blueSky_Access.findFirst({
       where: { usuarioId: user.id },
     });
@@ -29,7 +29,7 @@ export async function GET() {
       password: decryptedPassword,
     });
 
-    // 4. Fetch profile
+    // 4. Solicitar perfil y sus datos (foto, nombre, handle, seguidores y publis)
     const response = await agent.app.bsky.actor.getProfile({
       actor: agent.session?.did!,
     });
