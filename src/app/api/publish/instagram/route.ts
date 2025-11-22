@@ -47,11 +47,6 @@ async function graphPost<T = any>(
     return json as T;
 }
 
-/**
- * Build an absolute URL from the media URL stored in DB.
- * - If it’s already absolute (http/https) → return as-is
- * - If it’s relative (/uploads/foo.jpg) → prefix with NEXT_PUBLIC_APP_URL or VERCEL_URL
- */
 function buildAbsoluteUrl(pathOrUrl: string): string {
     if (pathOrUrl.startsWith("http://") || pathOrUrl.startsWith("https://")) {
         return pathOrUrl;
@@ -94,7 +89,6 @@ async function publishWithRetry(
             const msg = err?.message ?? "";
             lastError = err;
 
-            // Error 9007 / 2207027 → media aún no está listo para publicar
             if (msg.includes("Media ID is not available") && attempt < maxAttempts) {
                 console.warn(
                     `⏳ Media aún no está listo en IG (intento ${attempt}/${maxAttempts}). Reintentando en ${delayMs / 1000
@@ -103,8 +97,6 @@ async function publishWithRetry(
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
                 continue;
             }
-
-            // Otros errores o último intento → se relanza
             throw err;
         }
     }
@@ -114,13 +106,6 @@ async function publishWithRetry(
     );
 }
 
-/**
- * Get Page access token + IG Business Account ID from your Instagram_Access table.
- * We assume Instagram_Access.accessToken is a **user access token**.
- * Flow:
- *   - /me/accounts?fields=id,name,access_token,instagram_business_account{id,username}
- *   - pick a Page that has instagram_business_account
- */
 async function getInstagramCredentialsForUser(userId: number): Promise<{
     pageAccessToken: string;
     igUserId: string;
@@ -128,7 +113,7 @@ async function getInstagramCredentialsForUser(userId: number): Promise<{
     const igAccess = await prisma.instagram_Access.findFirst({
         where: {
             userId,
-            redSocial: 2, // 2 = Instagram in your schema
+            redSocial: 2, 
         },
     });
 
@@ -195,6 +180,218 @@ async function getInstagramCredentialsForUser(userId: number): Promise<{
     };
 }
 
+// ✅ LÓGICA INTERNA REUTILIZABLE (Para Cron y API)
+export async function publishToInstagramInternal(userId: number, postId: number, variantId?: number | null) {
+    // 1. Obtener Post + Variants + Medias
+    const post = await prisma.post.findUnique({
+        where: { id: postId },
+        include: {
+            variants: true,
+            medias: {
+                orderBy: { mediaOrder: "asc" },
+            },
+        },
+    });
+
+    if (!post) {
+        throw new Error("POST_NOT_FOUND");
+    }
+
+    const variant =
+        variantId != null
+            ? post.variants.find((v) => v.id === variantId)
+            : post.variants.find((v) => v.network === "INSTAGRAM");
+
+    if (!variant) {
+        throw new Error("INSTAGRAM_VARIANT_NOT_FOUND");
+    }
+
+    let medias = post.medias;
+    if (!medias || medias.length === 0) {
+        throw new Error("NO_MEDIA_FOR_POST");
+    }
+
+    // Enforce IG limit: max 10 items
+    if (medias.length > 10) {
+        medias = medias.slice(0, 10);
+    }
+
+    // 2. Obtener credenciales usando el ID de usuario
+    const { pageAccessToken, igUserId } = await getInstagramCredentialsForUser(userId);
+
+    const caption =
+        (variant.text && variant.text.trim().length > 0
+            ? variant.text
+            : post.body || "") ?? "";
+
+    console.log("📸 IG medias candidate:", {
+        postId: post.id,
+        medias: medias.map((m) => ({
+            id: m.id,
+            type: m.type,
+            mime: m.mime,
+            url: m.url,
+            mediaOrder: m.mediaOrder,
+        })),
+    });
+
+    let finalMediaId: string | null = null;
+
+    // 3. Lógica de publicación (Single vs Carousel)
+    if (medias.length === 1) {
+        // ✅ Single media flow
+        const media = medias[0];
+        const mediaUrl = buildAbsoluteUrl(media.url);
+        const isVideo =
+            media.type === "VIDEO" ||
+            media.mime.toLowerCase().startsWith("video/");
+
+        console.log("📸 Publicando IG single media:", {
+            mediaId: media.id,
+            urlSent: mediaUrl,
+            isVideo,
+        });
+
+        let containerRes: { id: string };
+
+        if (isVideo) {
+            containerRes = await graphPost<{ id: string }>(`/${igUserId}/media`, {
+                media_type: "VIDEO",
+                video_url: mediaUrl,
+                caption,
+                access_token: pageAccessToken,
+            });
+        } else {
+            containerRes = await graphPost<{ id: string }>(`/${igUserId}/media`, {
+                image_url: mediaUrl,
+                caption,
+                access_token: pageAccessToken,
+            });
+        }
+
+        const publishRes = await publishWithRetry(
+            igUserId,
+            containerRes.id,
+            pageAccessToken
+        );
+
+        finalMediaId = publishRes.id;
+        console.log("✅ IG single media published:", publishRes);
+
+    } else {
+        // ✅ Carousel flow
+        const childrenIds: string[] = [];
+
+        for (const media of medias) {
+            const mediaUrl = buildAbsoluteUrl(media.url);
+            const isVideo =
+                media.type === "VIDEO" ||
+                media.mime.toLowerCase().startsWith("video/");
+
+            console.log("📸 Creando contenedor de carrusel:", {
+                mediaId: media.id,
+                urlSent: mediaUrl,
+                isVideo,
+            });
+
+            let childContainer: { id: string };
+
+            if (isVideo) {
+                childContainer = await graphPost<{ id: string }>(
+                    `/${igUserId}/media`,
+                    {
+                        media_type: "VIDEO",
+                        video_url: mediaUrl,
+                        is_carousel_item: "true",
+                        access_token: pageAccessToken,
+                    }
+                );
+            } else {
+                childContainer = await graphPost<{ id: string }>(
+                    `/${igUserId}/media`,
+                    {
+                        image_url: mediaUrl,
+                        is_carousel_item: "true",
+                        access_token: pageAccessToken,
+                    }
+                );
+            }
+
+            childrenIds.push(childContainer.id);
+        }
+
+        console.log("📚 IDs de hijos para carrusel:", childrenIds);
+
+        const carouselContainer = await graphPost<{ id: string }>(
+            `/${igUserId}/media`,
+            {
+                media_type: "CAROUSEL",
+                children: childrenIds.join(","),
+                caption,
+                access_token: pageAccessToken,
+            }
+        );
+
+        console.log("✅ IG carousel container created:", carouselContainer);
+
+        const publishRes = await publishWithRetry(
+            igUserId,
+            carouselContainer.id,
+            pageAccessToken
+        );
+
+        finalMediaId = publishRes.id;
+        console.log("✅ IG carousel published:", publishRes);
+    }
+
+    // 4. Obtener permalink (opcional)
+    let permalink: string | null = null;
+    if (finalMediaId) {
+        try {
+            const mediaData = await fetch(
+                `${GRAPH_BASE_URL}/${finalMediaId}?fields=permalink&access_token=${encodeURIComponent(
+                    pageAccessToken
+                )}`
+            );
+            const json = await mediaData.json();
+            if (json?.permalink) {
+                permalink = json.permalink as string;
+            }
+        } catch (e) {
+            console.warn("⚠️ Could not fetch IG permalink:", e);
+        }
+    }
+
+    // 5. Actualizar DB
+    await prisma.$transaction(async (tx) => {
+        await tx.variant.update({
+            where: { id: variant.id },
+            data: {
+                status: "PUBLISHED",
+                uri: finalMediaId ?? undefined,
+                permalink: permalink ?? undefined,
+            },
+        });
+        if (post.status !== "PUBLISHED") {
+            await tx.post.update({
+                where: { id: post.id },
+                data: {
+                    status: "PUBLISHED",
+                },
+            });
+        }
+    });
+
+    return {
+        ok: true,
+        mediaId: finalMediaId,
+        uri: finalMediaId,
+        permalink,
+    };
+}
+
+
+// HANDLER POST (Para llamadas desde el navegador/frontend)
 export async function POST(req: Request) {
     try {
         const session = await getServerSession();
@@ -229,227 +426,10 @@ export async function POST(req: Request) {
             );
         }
 
-        // Get Post + Variants + Medias (ordered)
-        const post = await prisma.post.findUnique({
-            where: { id: postId },
-            include: {
-                variants: true,
-                medias: {
-                    orderBy: { mediaOrder: "asc" },
-                },
-            },
-        });
+        // Llamamos a la función interna
+        const result = await publishToInstagramInternal(user.id, postId, variantId);
 
-        if (!post) {
-            return NextResponse.json(
-                { ok: false, error: "POST_NOT_FOUND" },
-                { status: 404 }
-            );
-        }
-
-        const variant =
-            variantId != null
-                ? post.variants.find((v) => v.id === variantId)
-                : post.variants.find((v) => v.network === "INSTAGRAM");
-
-        if (!variant) {
-            return NextResponse.json(
-                { ok: false, error: "INSTAGRAM_VARIANT_NOT_FOUND" },
-                { status: 404 }
-            );
-        }
-
-        // All medias for this post in composer order
-        let medias = post.medias;
-        if (!medias || medias.length === 0) {
-            return NextResponse.json(
-                { ok: false, error: "NO_MEDIA_FOR_POST" },
-                { status: 400 }
-            );
-        }
-
-        // Enforce IG limit: max 10 items
-        if (medias.length > 10) {
-            medias = medias.slice(0, 10);
-        }
-
-        const { pageAccessToken, igUserId } =
-            await getInstagramCredentialsForUser(user.id);
-
-        // Caption: prefer variant.text, fallback to post.body
-        const caption =
-            (variant.text && variant.text.trim().length > 0
-                ? variant.text
-                : post.body || "") ?? "";
-
-        console.log("📸 IG medias candidate:", {
-            postId: post.id,
-            medias: medias.map((m) => ({
-                id: m.id,
-                type: m.type,
-                mime: m.mime,
-                url: m.url,
-                mediaOrder: m.mediaOrder,
-            })),
-        });
-
-        let finalMediaId: string | null = null;
-
-        if (medias.length === 1) {
-            // ✅ Single media flow (image or video)
-            const media = medias[0];
-            const mediaUrl = buildAbsoluteUrl(media.url);
-            const isVideo =
-                media.type === "VIDEO" ||
-                media.mime.toLowerCase().startsWith("video/");
-
-            console.log("📸 Publicando IG single media:", {
-                mediaId: media.id,
-                urlSent: mediaUrl,
-                isVideo,
-            });
-
-            let containerRes: { id: string };
-
-            if (isVideo) {
-                containerRes = await graphPost<{ id: string }>(`/${igUserId}/media`, {
-                    media_type: "VIDEO",
-                    video_url: mediaUrl,
-                    caption,
-                    access_token: pageAccessToken,
-                });
-            } else {
-                containerRes = await graphPost<{ id: string }>(`/${igUserId}/media`, {
-                    image_url: mediaUrl,
-                    caption,
-                    access_token: pageAccessToken,
-                });
-            }
-
-            const publishRes = await publishWithRetry(
-                igUserId,
-                containerRes.id,
-                pageAccessToken
-            );
-
-            finalMediaId = publishRes.id;
-            console.log("✅ IG single media published:", publishRes);
-
-        } else {
-            // ✅ Carousel flow: create one container per child with is_carousel_item=true
-            const childrenIds: string[] = [];
-
-            for (const media of medias) {
-                const mediaUrl = buildAbsoluteUrl(media.url);
-                const isVideo =
-                    media.type === "VIDEO" ||
-                    media.mime.toLowerCase().startsWith("video/");
-
-                console.log("📸 Creando contenedor de carrusel:", {
-                    mediaId: media.id,
-                    urlSent: mediaUrl,
-                    isVideo,
-                });
-
-                let childContainer: { id: string };
-
-                if (isVideo) {
-                    childContainer = await graphPost<{ id: string }>(
-                        `/${igUserId}/media`,
-                        {
-                            media_type: "VIDEO",
-                            video_url: mediaUrl,
-                            is_carousel_item: "true",
-                            access_token: pageAccessToken,
-                        }
-                    );
-                } else {
-                    childContainer = await graphPost<{ id: string }>(
-                        `/${igUserId}/media`,
-                        {
-                            image_url: mediaUrl,
-                            is_carousel_item: "true",
-                            access_token: pageAccessToken,
-                        }
-                    );
-                }
-
-                childrenIds.push(childContainer.id);
-            }
-
-            console.log("📚 IDs de hijos para carrusel:", childrenIds);
-
-            // Create the carousel container
-            const carouselContainer = await graphPost<{ id: string }>(
-                `/${igUserId}/media`,
-                {
-                    media_type: "CAROUSEL",
-                    children: childrenIds.join(","),
-                    caption,
-                    access_token: pageAccessToken,
-                }
-            );
-
-            console.log("✅ IG carousel container created:", carouselContainer);
-
-            const publishRes = await publishWithRetry(
-                igUserId,
-                carouselContainer.id,
-                pageAccessToken
-            );
-
-            finalMediaId = publishRes.id;
-            console.log("✅ IG carousel published:", publishRes);
-
-        }
-
-        // Try to fetch permalink (optional)
-        let permalink: string | null = null;
-        if (finalMediaId) {
-            try {
-                const mediaData = await fetch(
-                    `${GRAPH_BASE_URL}/${finalMediaId}?fields=permalink&access_token=${encodeURIComponent(
-                        pageAccessToken
-                    )}`
-                );
-                const json = await mediaData.json();
-                if (json?.permalink) {
-                    permalink = json.permalink as string;
-                }
-            } catch (e) {
-                console.warn("⚠️ Could not fetch IG permalink:", e);
-            }
-        }
-
-        // Update Variant & Post statuses
-        await prisma.$transaction(async (tx) => {
-            await tx.variant.update({
-                where: { id: variant.id },
-                data: {
-                    status: "PUBLISHED",
-                    uri: finalMediaId ?? undefined,
-                    permalink: permalink ?? undefined,
-                },
-            });
-            if (post.status !== "PUBLISHED") {
-                await tx.post.update({
-                    where: { id: post.id },
-                    data: {
-                        status: "PUBLISHED",
-                    },
-                });
-            }
-        });
-
-        return NextResponse.json(
-            {
-                ok: true,
-                mediaId: finalMediaId,
-                uri: finalMediaId,   // 👈 explicit
-                permalink,
-            },
-            { status: 200 }
-        );
+        return NextResponse.json(result, { status: 200 });
 
     } catch (err: any) {
         console.error("❌ Error en /api/publish/instagram:", err);

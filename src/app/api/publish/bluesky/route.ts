@@ -1,4 +1,3 @@
-
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { AtpAgent } from "@atproto/api";
@@ -93,27 +92,13 @@ async function compressToSizeLimit(
   return output;
 }
 
-export async function POST(req: Request) {
-  const session = await getServerSession();
-  if (!session)
-    return Response.json(
-      { ok: false, error: "Not authenticated" },
-      { status: 401 },
-    );
-
-  const { postId, variantId } = await req.json();
-
-  try {
-    // Busca usuario y sus credenciales de Bluesky
-    const user = await prisma.user.findUnique({
-      where: { email: session.user?.email ?? "" },
-    });
-    if (!user) throw new Error("User not found");
-
+// ✅ LÓGICA INTERNA REUTILIZABLE (Para Cron y API)
+export async function publishToBlueskyInternal(userId: number, postId: number, variantId: number) {
+    // 1. Obtener credenciales de usuario
     const access = await prisma.blueSky_Access.findFirst({
-      where: { usuarioId: user.id },
+      where: { usuarioId: userId },
     });
-    if (!access) throw new Error("No Bluesky access found");
+    if (!access) throw new Error("No Bluesky access found for this user");
 
     const decryptedPassword = decryptBlueskySecret(access.appPassword);
 
@@ -123,7 +108,7 @@ export async function POST(req: Request) {
       password: decryptedPassword,
     });
 
-    // Busca información de post y su variante
+    // 2. Buscar Post y Variante
     const variant = await prisma.variant.findUnique({
       where: { id: variantId },
     });
@@ -133,7 +118,7 @@ export async function POST(req: Request) {
       where: { id: postId },
       include: {
         medias: {
-          orderBy: { mediaOrder: "asc" }, // mismo orden que el carrusel del composer
+          orderBy: { mediaOrder: "asc" }, 
         },
       },
     });
@@ -152,23 +137,13 @@ export async function POST(req: Request) {
         (m.mime || "").toLowerCase().startsWith("video/"),
     );
 
-    // 🔒 Reglas Bluesky: máx 4 imágenes o 1 video (sin mezclar)
+    // 3. Validaciones de reglas Bluesky
     if (videoMedias.length > 1) {
-      return Response.json(
-        { ok: false, error: "Bluesky solo permite 1 video por post." },
-        { status: 400 },
-      );
+      throw new Error("Bluesky solo permite 1 video por post.");
     }
 
     if (videoMedias.length === 1 && imageMedias.length > 0) {
-      return Response.json(
-        {
-          ok: false,
-          error:
-            "Bluesky no permite mezclar imágenes y video en el mismo post.",
-        },
-        { status: 400 },
-      );
+      throw new Error("Bluesky no permite mezclar imágenes y video en el mismo post.");
     }
 
     let mode: "text" | "images" | "video" = "text";
@@ -179,12 +154,10 @@ export async function POST(req: Request) {
       mode = "images";
     }
 
-    const selectedImages =
-      mode === "images" ? imageMedias.slice(0, 4) : [];
-    const selectedVideo =
-      mode === "video" ? videoMedias[0] : null;
+    const selectedImages = mode === "images" ? imageMedias.slice(0, 4) : [];
+    const selectedVideo = mode === "video" ? videoMedias[0] : null;
 
-    // Prepara texto y facets
+    // 4. Preparar texto y facets
     const text = (variant.text || post.body || "").toString();
     const facets = buildHashtagFacets(text);
 
@@ -195,7 +168,7 @@ export async function POST(req: Request) {
       ...(facets.length ? { facets } : {}),
     };
 
-    // Construir embed según modo
+    // 5. Procesar multimedia
     if (mode === "images" && selectedImages.length > 0) {
       const images: any[] = [];
 
@@ -210,11 +183,8 @@ export async function POST(req: Request) {
         }
 
         const arrayBuffer = await resImg.arrayBuffer();
-
-        // Empezamos desde un Buffer de Node
         let imageBuffer: any = Buffer.from(arrayBuffer);
 
-        // Si supera el límite, comprimimos
         if (imageBuffer.byteLength > MAX_BSKY_IMAGE_BYTES) {
           imageBuffer = await compressToSizeLimit(imageBuffer, media.mime);
         }
@@ -223,7 +193,6 @@ export async function POST(req: Request) {
           encoding: media.mime || "image/jpeg",
         });
 
-        // 👇 AQUÍ: agregamos la imagen al embed
         images.push({
           image: blobRes.data.blob,
           alt: post.title || "Post image",
@@ -236,8 +205,6 @@ export async function POST(req: Request) {
       };
     }
     else if (mode === "video" && selectedVideo) {
-      // Implementación simple: video como enlace externo
-      // (Más adelante se puede migrar a app.bsky.embed.video si quieres soporte nativo)
       const videoUrl = selectedVideo.url.startsWith("http")
         ? selectedVideo.url
         : `${APP_URL}${selectedVideo.url}`;
@@ -251,42 +218,22 @@ export async function POST(req: Request) {
         },
       };
     }
-    // Si mode === "text", no se agrega embed
 
-    // Creación de post en Bluesky
+    // 6. Crear el Post en Bluesky
     const response = await agent.com.atproto.repo.createRecord({
       repo: agent.session?.did!,
       collection: "app.bsky.feed.post",
       record,
     });
 
-    // Debug de la respuesta de BSKY
     console.log("Bluesky createRecord response:", response);
 
     const uri = response.data.uri;
-    const cid = response.data.cid;
-
     const now = new Date();
+    const dateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const timeOnly = new Date(1970, 0, 1, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
 
-    // Adquiere Fecha
-    const dateOnly = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-
-    // Adquiere Tiempo (Hora)
-    const timeOnly = new Date(
-      1970,
-      0,
-      1,
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds(),
-      now.getMilliseconds(),
-    );
-
-    // Actualiza en prisma estado de variante
+    // 7. Actualizar estado en DB
     await prisma.variant.update({
       where: { id: variantId },
       data: {
@@ -297,7 +244,30 @@ export async function POST(req: Request) {
       },
     });
 
-    return Response.json({ ok: true, uri });
+    return { ok: true, uri };
+}
+
+// HANDLER POST (Para llamadas desde el navegador/frontend)
+export async function POST(req: Request) {
+  const session = await getServerSession();
+  if (!session)
+    return Response.json(
+      { ok: false, error: "Not authenticated" },
+      { status: 401 },
+    );
+
+  const { postId, variantId } = await req.json();
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: session.user?.email ?? "" },
+    });
+    if (!user) throw new Error("User not found");
+
+    // Llamamos a la función interna
+    const result = await publishToBlueskyInternal(user.id, postId, variantId);
+
+    return Response.json(result);
   } catch (err: any) {
     console.error("Bluesky publish error:", err);
     return Response.json(

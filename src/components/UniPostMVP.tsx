@@ -4,6 +4,8 @@ import { useState, useEffect, type ChangeEvent } from "react";
 import { useSession, signOut } from "next-auth/react";
 import toast from "react-hot-toast";
 
+// --- TIPOS E INTERFACES ---
+
 type Variant = {
   id?: number;
   network: string;
@@ -32,19 +34,29 @@ type Post = {
 };
 
 type NewMedia = {
-  id: string; // client-side uuid
+  id: string; 
   file: File;
-  previewUrl: string; // object URL for <img>/<video>
-  base64: string; // to send to API
+  previewUrl: string; 
+  base64: string; 
   type: "image" | "video";
-  order: number; // position in carousel (0-based)
+  order: number; 
 };
 
 const ALL_NETWORKS = ["INSTAGRAM", "BLUESKY"] as const;
 
+// 🌎 Zonas horarias para el Scheduler
+const TIMEZONES = [
+  { label: "Chile/Argentina (GMT-3)", value: "-03:00" },
+  { label: "Bolivia/Venezuela (GMT-4)", value: "-04:00" },
+  { label: "Perú/Colombia/Ecuador (GMT-5)", value: "-05:00" },
+  { label: "México Central (GMT-6)", value: "-06:00" },
+  { label: "UTC (GMT+0)", value: "+00:00" },
+];
+
 export default function ComposerPage() {
   const { data: session } = useSession();
 
+  // --- ESTADOS ---
   const [posts, setPosts] = useState<Post[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -54,19 +66,22 @@ export default function ComposerPage() {
   const [loading, setLoading] = useState(false);
   const [medias, setMedias] = useState<NewMedia[]>([]);
 
-  // Per-post media index for the existing posts carousel
+  // Estado para el carrusel de imágenes en posts existentes
   const [postMediaIndex, setPostMediaIndex] = useState<{
     [postId: number]: number;
   }>({});
 
-  // 🕒 Campos para agendar
+  // 🕒 ESTADOS DEL SCHEDULER
   const [agendar, setAgendar] = useState(false);
-  const [zona, setZona] = useState("GMT -3");
-  const [hora, setHora] = useState("14:30");
+  const [fecha, setFecha] = useState(""); // YYYY-MM-DD
+  const [hora, setHora] = useState("12:00"); // HH:mm
+  const [zona, setZona] = useState("-03:00"); // Offset por defecto
 
   useEffect(() => {
     fetchPosts();
   }, []);
+
+  // --- FUNCIONES AUXILIARES DE MEDIA ---
 
   function moveMedia(index: number, direction: "left" | "right") {
     setMedias((prev) => {
@@ -78,7 +93,6 @@ export default function ComposerPage() {
       arr[index] = arr[newIndex];
       arr[newIndex] = temp;
 
-      // Recalcular order según posición
       return arr.map((m, idx) => ({ ...m, order: idx }));
     });
   }
@@ -111,7 +125,7 @@ export default function ComposerPage() {
     const imageCount = currentMedias.filter((m) => m.type === "image").length;
     const videoCount = currentMedias.filter((m) => m.type === "video").length;
 
-    // 📷 Instagram: máximo 10 medias (imágenes o videos)
+    // 📷 Instagram: máximo 10 medias
     if (hasInstagram && currentMedias.length >= 10) {
       return {
         ok: false,
@@ -122,7 +136,6 @@ export default function ComposerPage() {
     // 🐦 Bluesky rules
     if (hasBluesky) {
       if (isVideo) {
-        // 1 video máx, y sin mezclar con imágenes
         if (videoCount >= 1) {
           return { ok: false, reason: "Bluesky solo permite 1 video." };
         }
@@ -133,7 +146,6 @@ export default function ComposerPage() {
           };
         }
       } else {
-        // imágenes
         if (videoCount > 0) {
           return {
             ok: false,
@@ -156,11 +168,9 @@ export default function ComposerPage() {
     const selected = e.target.files?.[0];
     if (!selected) return;
 
-    // 1) Check rules before reading the file
     const check = canAddMedia(selected, medias);
     if (!check.ok) {
       toast.error(check.reason || "No se puede agregar este archivo.");
-      // reset input so the same file can be chosen again later
       e.target.value = "";
       return;
     }
@@ -176,7 +186,7 @@ export default function ComposerPage() {
         previewUrl: URL.createObjectURL(selected),
         base64,
         type: isVideo ? "video" : "image",
-        order: medias.length, // goes at the end of the carousel
+        order: medias.length,
       };
 
       setMedias((prev) => [...prev, newMedia]);
@@ -189,6 +199,8 @@ export default function ComposerPage() {
     return base64?.startsWith("data:video");
   }
 
+  // --- FUNCIONES DE LÓGICA DE POSTS ---
+
   async function fetchPosts() {
     const res = await fetch("/api/posts");
     const json = await res.json();
@@ -199,8 +211,34 @@ export default function ComposerPage() {
     e.preventDefault();
     setLoading(true);
 
+    let schedulePayload = null;
+
+    // 🗓️ LÓGICA DE AGENDAMIENTO
+    if (agendar) {
+        if (!fecha || !hora) {
+            toast.error("⚠️ Debes seleccionar fecha y hora para agendar.");
+            setLoading(false);
+            return;
+        }
+
+        // Construimos la fecha ISO 8601 completa: YYYY-MM-DDTHH:mm:ss-03:00
+        const isoString = `${fecha}T${hora}:00${zona}`;
+        
+        const dateCheck = new Date(isoString);
+        if (isNaN(dateCheck.getTime())) {
+            toast.error("Fecha inválida.");
+            setLoading(false);
+            return;
+        }
+
+        schedulePayload = {
+            runAt: dateCheck.toISOString(),
+            timezone: zona,
+        };
+    }
+
     const payload = {
-      organizationId: 1,
+      organizationId: 1, // Debería ser dinámico en producción
       title,
       body,
       variants,
@@ -209,10 +247,10 @@ export default function ComposerPage() {
         .sort((a, b) => a.order - b.order)
         .map((m) => ({
           base64: m.base64,
-          type: m.type, // "image" | "video"
-          order: m.order, // 0-based position in carousel
+          type: m.type,
+          order: m.order,
         })),
-      schedule: agendar ? { runAt: hora, timezone: zona } : null,
+      schedule: schedulePayload,
     };
 
     const res = await fetch("/api/posts", {
@@ -224,16 +262,16 @@ export default function ComposerPage() {
     const json = await res.json();
 
     if (json.ok) {
-      toast.success("✅ Publicación creada con éxito");
+      toast.success(agendar ? "📅 Publicación agendada con éxito" : "✅ Publicación creada con éxito");
       setTitle("");
       setBody("");
-      setMedias([]); // 🔄 limpiar lista de medias
+      setMedias([]);
       setAgendar(false);
-      // 🔄 resetear variantes a estado inicial
+      setFecha("");
       setVariants([{ network: "INSTAGRAM", text: "" }]);
       fetchPosts();
     } else {
-      toast.error("❌ Error al crear la publicación");
+      toast.error("❌ Error: " + (json.error || "Fallo al crear post"));
     }
 
     setLoading(false);
@@ -263,17 +301,6 @@ export default function ComposerPage() {
     });
   }
 
-  const statusColor = (status: string) => {
-    switch (status) {
-      case "PUBLISHED":
-        return "bg-green-500/10 text-green-300 border border-green-500/30";
-      case "SCHEDULED":
-        return "bg-yellow-500/10 text-yellow-300 border border-yellow-500/30";
-      default:
-        return "bg-gray-500/10 text-gray-300 border border-gray-500/30";
-    }
-  };
-
   const handleVariantTextChange = (
     index: number,
     e: ChangeEvent<HTMLTextAreaElement>
@@ -282,13 +309,11 @@ export default function ComposerPage() {
     newVariants[index].text = e.target.value;
     setVariants(newVariants);
 
-    // Auto-grow textarea
     const el = e.target;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   };
   
-  // Editar texto de variantes de publicaciones existentes (no publicado)
   const handleExistingVariantTextChange = (
     postId: number,
     variantId: number | undefined,
@@ -308,10 +333,7 @@ export default function ComposerPage() {
       )
     );
   };
-  const usedNetworks = variants.map((v) => v.network);
-  const availableNetworks = ALL_NETWORKS.filter(
-    (net) => !usedNetworks.includes(net)
-  );
+
   const movePostMedia = (
     postId: number,
     direction: "left" | "right",
@@ -326,6 +348,12 @@ export default function ComposerPage() {
       return { ...prev, [postId]: next };
     });
   };
+
+  const usedNetworks = variants.map((v) => v.network);
+  const availableNetworks = ALL_NETWORKS.filter(
+    (net) => !usedNetworks.includes(net)
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white py-10 px-6">
       <div className="max-w-5xl mx-auto">
@@ -362,6 +390,7 @@ export default function ComposerPage() {
         <h1 className="text-4xl font-bold mb-10 text-center tracking-tight">
           Crear nueva publicación
         </h1>
+
         {/* FORMULARIO */}
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg mb-10">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -379,6 +408,7 @@ export default function ComposerPage() {
               onChange={(e) => setBody(e.target.value)}
               required
             />
+
             {/* 📎 Adjuntar imagen o video */}
             <div>
               <label className="block text-sm mb-2 text-gray-200">
@@ -450,6 +480,7 @@ export default function ComposerPage() {
                 </div>
               )}
             </div>
+
             {/* 🔁 Redes dinámicas */}
             {variants.map((v, i) => (
               <div key={i} className="flex gap-3 items-center">
@@ -468,9 +499,8 @@ export default function ComposerPage() {
                 <textarea
                   value={v.text}
                   onChange={(e) => handleVariantTextChange(i, e)}
-                  placeholder="Texto del post"
+                  placeholder={`Texto para ${v.network}`}
                   rows={1}
-                  data-variant-textarea="true"
                   className="flex-1 p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300 resize-none overflow-hidden leading-relaxed"
                 />
                 {variants.length > 1 && (
@@ -484,6 +514,7 @@ export default function ComposerPage() {
                 )}
               </div>
             ))}
+
             {/* 🟩 Selector para nueva red */}
             {availableNetworks.length > 0 && (
               <div className="flex gap-3 items-center">
@@ -525,52 +556,67 @@ export default function ComposerPage() {
                 </button>
               </div>
             )}
-            {/* 🕒 Agendar publicación */}
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2">
-                <span>¿Agendar?</span>
-                <input
-                  type="checkbox"
-                  checked={agendar}
-                  onChange={() => setAgendar(!agendar)}
-                  className="w-4 h-4 accent-purple-400"
+
+            {/* 📅 SCHEDULER (Agendamiento) */}
+            <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10">
+              <label className="flex items-center gap-2 mb-4 cursor-pointer">
+                <input 
+                    type="checkbox" 
+                    checked={agendar} 
+                    onChange={() => setAgendar(!agendar)} 
+                    className="w-5 h-5 accent-purple-400 rounded" 
                 />
+                <span className="font-bold text-lg">📅 Programar publicación</span>
               </label>
+              
               {agendar && (
-                <>
-                  <label className="flex items-center gap-2">
-                    Zona
-                    <select
-                      value={zona}
-                      onChange={(e) => setZona(e.target.value)}
-                      className="bg-white/10 border border-white/20 rounded-lg px-2 py-1"
-                    >
-                      <option>GMT -3</option>
-                      <option>GMT -4</option>
-                      <option>GMT -5</option>
-                      <option>GMT 0</option>
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Hora
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
+                  <div>
+                    <label className="block text-xs text-gray-300 mb-1">Fecha</label>
+                    <input
+                      type="date"
+                      value={fecha}
+                      min={new Date().toISOString().split("T")[0]}
+                      onChange={(e) => setFecha(e.target.value)}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white [color-scheme:dark]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-300 mb-1">Hora</label>
                     <input
                       type="time"
                       value={hora}
                       onChange={(e) => setHora(e.target.value)}
-                      className="bg-white/10 border border-white/20 rounded-lg px-2 py-1"
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white [color-scheme:dark]"
                     />
-                  </label>
-                </>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-300 mb-1">Zona Horaria</label>
+                    <select
+                      value={zona}
+                      onChange={(e) => setZona(e.target.value)}
+                      className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white"
+                    >
+                      {TIMEZONES.map((tz) => (
+                        <option key={tz.value} value={tz.value} className="text-black">
+                          {tz.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               )}
             </div>
+
             <button
               disabled={loading}
-              className="bg-gradient-to-r from-purple-500 to-indigo-500 px-6 py-2 rounded-lg font-semibold hover:opacity-90 transition"
+              className="w-full md:w-auto bg-gradient-to-r from-purple-500 to-indigo-500 px-8 py-3 rounded-lg font-bold hover:opacity-90 transition shadow-lg"
             >
-              {loading ? "Creando..." : "Crear publicación"}
+              {loading ? "Procesando..." : agendar ? "Agendar Publicación" : "Crear publicación"}
             </button>
           </form>
         </div>
+
         {/* 📋 Publicaciones existentes */}
         <div className="space-y-6 mt-10">
           <h2 className="text-2xl font-semibold mb-4 text-white/90">
@@ -582,17 +628,12 @@ export default function ComposerPage() {
             posts.map((p) => {
               const mediaList = p.medias || [];
               const totalMedia = mediaList.length;
-              const currentIndex =
-                postMediaIndex[p.id] ?? 0;
+              const currentIndex = postMediaIndex[p.id] ?? 0;
               const currentMedia =
                 totalMedia > 0
-                  ? mediaList[
-                  Math.min(
-                    Math.max(currentIndex, 0),
-                    totalMedia - 1
-                  )
-                  ]
+                  ? mediaList[Math.min(Math.max(currentIndex, 0), totalMedia - 1)]
                   : null;
+              
               return (
                 <div
                   key={p.id}
@@ -603,10 +644,13 @@ export default function ComposerPage() {
                       {p.title}
                     </h3>
                     <span
-                      className={`text-sm px-3 py-1 rounded-full ${p.status === "PUBLISHED"
-                        ? "bg-green-500/10 text-green-300 border border-green-500/30"
-                        : "bg-gray-500/10 text-gray-300 border border-gray-500/30"
-                        }`}
+                      className={`text-sm px-3 py-1 rounded-full ${
+                        p.status === "PUBLISHED"
+                          ? "bg-green-500/10 text-green-300 border border-green-500/30"
+                          : p.status === "SCHEDULED"
+                          ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/30"
+                          : "bg-gray-500/10 text-gray-300 border border-gray-500/30"
+                      }`}
                     >
                       {p.status}
                     </span>
@@ -614,6 +658,7 @@ export default function ComposerPage() {
                   <p className="text-white/80 mb-4">
                     {p.body}
                   </p>
+                  
                   {/* Carrusel de medias */}
                   {currentMedia && (
                     <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex flex-col items-center">
@@ -636,15 +681,9 @@ export default function ComposerPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              movePostMedia(
-                                p.id,
-                                "left",
-                                totalMedia
-                              )
+                              movePostMedia(p.id, "left", totalMedia)
                             }
-                            disabled={
-                              (postMediaIndex[p.id] ?? 0) === 0
-                            }
+                            disabled={(postMediaIndex[p.id] ?? 0) === 0}
                             className="px-2 py-1 text-xs rounded bg-white/10 disabled:opacity-40"
                           >
                             ◀
@@ -655,16 +694,9 @@ export default function ComposerPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              movePostMedia(
-                                p.id,
-                                "right",
-                                totalMedia
-                              )
+                              movePostMedia(p.id, "right", totalMedia)
                             }
-                            disabled={
-                              (postMediaIndex[p.id] ?? 0) ===
-                              totalMedia - 1
-                            }
+                            disabled={(postMediaIndex[p.id] ?? 0) === totalMedia - 1}
                             className="px-2 py-1 text-xs rounded bg-white/10 disabled:opacity-40"
                           >
                             ▶
@@ -673,6 +705,7 @@ export default function ComposerPage() {
                       )}
                     </div>
                   )}
+
                   {/* fallback para posts viejos con mediaBase64 */}
                   {!currentMedia && p.mediaBase64 && (
                     <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex justify-center">
@@ -691,6 +724,7 @@ export default function ComposerPage() {
                       )}
                     </div>
                   )}
+
                   {/* Redes asociadas */}
                   <div className="space-y-3 mt-4">
                     {p.variants.map((v, i) => (
@@ -725,6 +759,8 @@ export default function ComposerPage() {
                             Estado: {v.status ?? "DRAFT"}
                           </p>
                         </div>
+                        
+                        {/* Botón Publicar Bluesky */}
                         {v.network === "BLUESKY" && (
                           <button
                             onClick={async () => {
@@ -733,10 +769,7 @@ export default function ComposerPage() {
                                   "/api/publish/bluesky",
                                   {
                                     method: "POST",
-                                    headers: {
-                                      "Content-Type":
-                                        "application/json",
-                                    },
+                                    headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       postId: p.id,
                                       variantId: v.id,
@@ -745,27 +778,15 @@ export default function ComposerPage() {
                                 );
                               const data = await res.json();
                               if (data.ok) {
-                                toast.success(
-                                  "Publicado en Bluesky ✅"
-                                );
-                                // 🔄 update local state without refresh
+                                toast.success("Publicado en Bluesky ✅");
                                 setPosts((prev) =>
                                   prev.map((post) =>
                                     post.id === p.id
                                       ? {
                                         ...post,
-                                        variants:
-                                          post.variants.map(
-                                            (varr) =>
-                                              varr.id ===
-                                                v.id
-                                                ? {
-                                                  ...varr,
-                                                  status:
-                                                    "PUBLISHED",
-                                                  bskyUri:
-                                                    data.uri,
-                                                }
+                                        variants: post.variants.map((varr) =>
+                                            varr.id === v.id
+                                                ? { ...varr, status: "PUBLISHED", bskyUri: data.uri }
                                                 : varr
                                           ),
                                       }
@@ -773,25 +794,21 @@ export default function ComposerPage() {
                                   )
                                 );
                               } else {
-                                toast.error(
-                                  "Error al publicar: " +
-                                  data.error
-                                );
+                                toast.error("Error al publicar: " + data.error);
                               }
                             }}
-                            disabled={
+                            disabled={v.status === "PUBLISHED"}
+                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${
                               v.status === "PUBLISHED"
-                            }
-                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${v.status === "PUBLISHED"
-                              ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
-                              : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
-                              }`}
+                                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
+                                : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
+                            }`}
                           >
-                            {v.status === "PUBLISHED"
-                              ? "Publicado ✅"
-                              : "Publicar"}
+                            {v.status === "PUBLISHED" ? "Publicado ✅" : "Publicar"}
                           </button>
                         )}
+
+                        {/* Botón Publicar Instagram */}
                         {v.network === "INSTAGRAM" && (
                           <button
                             onClick={async () => {
@@ -800,10 +817,7 @@ export default function ComposerPage() {
                                   "/api/publish/instagram",
                                   {
                                     method: "POST",
-                                    headers: {
-                                      "Content-Type":
-                                        "application/json",
-                                    },
+                                    headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       postId: p.id,
                                       variantId: v.id,
@@ -811,38 +825,20 @@ export default function ComposerPage() {
                                   }
                                 );
                               const data = await res.json();
-                              console.log(
-                                "📌 IG publish response:",
-                                data
-                              );
-                              if (!data.ok) {
-                                toast.error(
-                                  "Error al publicar en Instagram: " +
-                                  data.error
-                                );
-                              }
+                              
                               if (data.ok) {
-                                toast.success(
-                                  "Publicado en Instagram ✅"
-                                );
+                                toast.success("Publicado en Instagram ✅");
                                 setPosts((prev) =>
                                   prev.map((post) =>
                                     post.id === p.id
                                       ? {
                                         ...post,
-                                        variants:
-                                          post.variants.map(
-                                            (varr) =>
-                                              varr.id ===
-                                                v.id
+                                        variants: post.variants.map((varr) =>
+                                            varr.id === v.id
                                                 ? {
                                                   ...varr,
-                                                  status:
-                                                    "PUBLISHED",
-                                                  uri:
-                                                    data.uri ??
-                                                    data.mediaId ??
-                                                    varr.uri,
+                                                  status: "PUBLISHED",
+                                                  uri: data.uri ?? data.mediaId ?? varr.uri,
                                                 }
                                                 : varr
                                           ),
@@ -851,28 +847,23 @@ export default function ComposerPage() {
                                   )
                                 );
                               } else {
-                                toast.error(
-                                  "Error al publicar en Instagram: " +
-                                  data.error
-                                );
+                                toast.error("Error al publicar en Instagram: " + data.error);
                               }
                             }}
-                            disabled={
+                            disabled={v.status === "PUBLISHED"}
+                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${
                               v.status === "PUBLISHED"
-                            }
-                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${v.status === "PUBLISHED"
-                              ? "bg-gradient-to-r from-pink-500 to-rose-600 text-white cursor-default"
-                              : "bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white active:scale-95"
-                              }`}
+                                ? "bg-gradient-to-r from-pink-500 to-rose-600 text-white cursor-default"
+                                : "bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white active:scale-95"
+                            }`}
                           >
-                            {v.status === "PUBLISHED"
-                              ? "Publicado ✅"
-                              : "Publicar"}
+                            {v.status === "PUBLISHED" ? "Publicado ✅" : "Publicar"}
                           </button>
                         )}
                       </div>
                     ))}
                   </div>
+
                   {/* Botón eliminar */}
                   <div className="mt-4 flex justify-end">
                     <button
