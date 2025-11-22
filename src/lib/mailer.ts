@@ -1,6 +1,6 @@
 import { Resend } from "resend"; // Correcta importación de Resend
 
-const resend = new Resend(process.env.re_aJL2kNhR_LSCQMrpyEYtK7CAeLnENCwzT); // Usar la API Key de Resend
+const resend = new Resend(process.env.RESEND_API_KEY); // Usar la API Key de Resend
 
 export const sendVerificationEmail = async (to: string, code: string) => {
   const fromEmail = process.env.EMAIL_USER;

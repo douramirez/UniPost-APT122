@@ -22,6 +22,7 @@ export default function DashboardLayout({
     { href: "/", label: "🏠 Inicio"},
     { href: "/perfil", label: "👤 Perfil" },
     { href: "/composer", label: "✏️ Composer" },
+    { href: "/equipos", label: "👥 Equipos" },
     { href: "/metricas", label: "📊 Métricas" },
   ];
 

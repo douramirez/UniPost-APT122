@@ -15,10 +15,12 @@ model User {
   emailVerified    DateTime?
   password         String?
   roleID           BigInt?
+  organizationId   Int?
   BlueSky_Access   BlueSky_Access[]
   Instagram_Access Instagram_Access[]
   memberships      Membership[]
   posts            Post[]             @relation("UserPosts")
+  Organization     Organization?      @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Role             Role?              @relation(fields: [roleID], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
@@ -28,6 +30,7 @@ model Organization {
   plan        String
   memberships Membership[]
   posts       Post[]
+  User        User[]
 }
 
 model Membership {
@@ -76,6 +79,7 @@ model Variant {
   time_sent DateTime? @db.Time(6)
   uri       String?
   permalink String?
+  Metric    Metric[]
   post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
@@ -88,7 +92,9 @@ model Metric {
   shares      Int      @default(0)
   impressions Int      @default(0)
   collectedAt DateTime @default(now())
+  variantId   Int
   post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  Variant     Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
 }
 
 model RedSocial {

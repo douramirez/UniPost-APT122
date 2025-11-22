@@ -287,7 +287,7 @@ export default function ComposerPage() {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   };
-
+  
   // Editar texto de variantes de publicaciones existentes (no publicado)
   const handleExistingVariantTextChange = (
     postId: number,
@@ -307,14 +307,11 @@ export default function ComposerPage() {
           : post
       )
     );
-    // Nota: aquí solo actualizamos frontend; luego podemos conectar a un endpoint de actualización.
   };
-
   const usedNetworks = variants.map((v) => v.network);
   const availableNetworks = ALL_NETWORKS.filter(
     (net) => !usedNetworks.includes(net)
   );
-
   const movePostMedia = (
     postId: number,
     direction: "left" | "right",
@@ -329,7 +326,6 @@ export default function ComposerPage() {
       return { ...prev, [postId]: next };
     });
   };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white py-10 px-6">
       <div className="max-w-5xl mx-auto">
@@ -341,7 +337,6 @@ export default function ComposerPage() {
                 {session.user?.name || session.user?.email}
               </span>
             </p>
-
             <div className="flex justify-center mb-6 gap-4">
               <a
                 href="/perfil"
@@ -364,11 +359,9 @@ export default function ComposerPage() {
             </div>
           </>
         )}
-
         <h1 className="text-4xl font-bold mb-10 text-center tracking-tight">
           Crear nueva publicación
         </h1>
-
         {/* FORMULARIO */}
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg mb-10">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -379,7 +372,6 @@ export default function ComposerPage() {
               onChange={(e) => setTitle(e.target.value)}
               required
             />
-
             <textarea
               className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300"
               placeholder="Texto principal"
@@ -387,7 +379,6 @@ export default function ComposerPage() {
               onChange={(e) => setBody(e.target.value)}
               required
             />
-
             {/* 📎 Adjuntar imagen o video */}
             <div>
               <label className="block text-sm mb-2 text-gray-200">
@@ -459,7 +450,6 @@ export default function ComposerPage() {
                 </div>
               )}
             </div>
-
             {/* 🔁 Redes dinámicas */}
             {variants.map((v, i) => (
               <div key={i} className="flex gap-3 items-center">
@@ -475,7 +465,6 @@ export default function ComposerPage() {
                   <option>INSTAGRAM</option>
                   <option>BLUESKY</option>
                 </select>
-
                 <textarea
                   value={v.text}
                   onChange={(e) => handleVariantTextChange(i, e)}
@@ -484,7 +473,6 @@ export default function ComposerPage() {
                   data-variant-textarea="true"
                   className="flex-1 p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300 resize-none overflow-hidden leading-relaxed"
                 />
-
                 {variants.length > 1 && (
                   <button
                     type="button"
@@ -496,7 +484,6 @@ export default function ComposerPage() {
                 )}
               </div>
             ))}
-
             {/* 🟩 Selector para nueva red */}
             {availableNetworks.length > 0 && (
               <div className="flex gap-3 items-center">
@@ -538,7 +525,6 @@ export default function ComposerPage() {
                 </button>
               </div>
             )}
-
             {/* 🕒 Agendar publicación */}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2">
@@ -585,7 +571,6 @@ export default function ComposerPage() {
             </button>
           </form>
         </div>
-
         {/* 📋 Publicaciones existentes */}
         <div className="space-y-6 mt-10">
           <h2 className="text-2xl font-semibold mb-4 text-white/90">
@@ -608,7 +593,6 @@ export default function ComposerPage() {
                   )
                   ]
                   : null;
-
               return (
                 <div
                   key={p.id}
@@ -620,8 +604,8 @@ export default function ComposerPage() {
                     </h3>
                     <span
                       className={`text-sm px-3 py-1 rounded-full ${p.status === "PUBLISHED"
-                          ? "bg-green-500/10 text-green-300 border border-green-500/30"
-                          : "bg-gray-500/10 text-gray-300 border border-gray-500/30"
+                        ? "bg-green-500/10 text-green-300 border border-green-500/30"
+                        : "bg-gray-500/10 text-gray-300 border border-gray-500/30"
                         }`}
                     >
                       {p.status}
@@ -630,7 +614,6 @@ export default function ComposerPage() {
                   <p className="text-white/80 mb-4">
                     {p.body}
                   </p>
-
                   {/* Carrusel de medias */}
                   {currentMedia && (
                     <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex flex-col items-center">
@@ -690,7 +673,6 @@ export default function ComposerPage() {
                       )}
                     </div>
                   )}
-
                   {/* fallback para posts viejos con mediaBase64 */}
                   {!currentMedia && p.mediaBase64 && (
                     <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-white/5 p-2 flex justify-center">
@@ -709,7 +691,6 @@ export default function ComposerPage() {
                       )}
                     </div>
                   )}
-
                   {/* Redes asociadas */}
                   <div className="space-y-3 mt-4">
                     {p.variants.map((v, i) => (
@@ -744,7 +725,6 @@ export default function ComposerPage() {
                             Estado: {v.status ?? "DRAFT"}
                           </p>
                         </div>
-
                         {v.network === "BLUESKY" && (
                           <button
                             onClick={async () => {
@@ -768,7 +748,6 @@ export default function ComposerPage() {
                                 toast.success(
                                   "Publicado en Bluesky ✅"
                                 );
-
                                 // 🔄 update local state without refresh
                                 setPosts((prev) =>
                                   prev.map((post) =>
@@ -804,8 +783,8 @@ export default function ComposerPage() {
                               v.status === "PUBLISHED"
                             }
                             className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${v.status === "PUBLISHED"
-                                ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
-                                : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
+                              ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white cursor-default"
+                              : "bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white active:scale-95"
                               }`}
                           >
                             {v.status === "PUBLISHED"
@@ -832,12 +811,10 @@ export default function ComposerPage() {
                                   }
                                 );
                               const data = await res.json();
-
                               console.log(
                                 "📌 IG publish response:",
                                 data
                               );
-
                               if (!data.ok) {
                                 toast.error(
                                   "Error al publicar en Instagram: " +
@@ -848,7 +825,6 @@ export default function ComposerPage() {
                                 toast.success(
                                   "Publicado en Instagram ✅"
                                 );
-
                                 setPosts((prev) =>
                                   prev.map((post) =>
                                     post.id === p.id
@@ -885,8 +861,8 @@ export default function ComposerPage() {
                               v.status === "PUBLISHED"
                             }
                             className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 shadow-md ${v.status === "PUBLISHED"
-                                ? "bg-gradient-to-r from-pink-500 to-rose-600 text-white cursor-default"
-                                : "bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white active:scale-95"
+                              ? "bg-gradient-to-r from-pink-500 to-rose-600 text-white cursor-default"
+                              : "bg-gradient-to-r from-pink-500 to-orange-500 hover:from-pink-400 hover:to-orange-400 text-white active:scale-95"
                               }`}
                           >
                             {v.status === "PUBLISHED"
@@ -897,7 +873,6 @@ export default function ComposerPage() {
                       </div>
                     ))}
                   </div>
-
                   {/* Botón eliminar */}
                   <div className="mt-4 flex justify-end">
                     <button

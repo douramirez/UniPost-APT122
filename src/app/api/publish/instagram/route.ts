@@ -74,6 +74,46 @@ function buildAbsoluteUrl(pathOrUrl: string): string {
     return `${base.replace(/\/$/, "")}${pathOrUrl}`;
 }
 
+async function publishWithRetry(
+    igUserId: string,
+    creationId: string,
+    pageAccessToken: string,
+    maxAttempts = 5,
+    delayMs = 3000
+): Promise<{ id: string }> {
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const res = await graphPost<{ id: string }>(`/${igUserId}/media_publish`, {
+                creation_id: creationId,
+                access_token: pageAccessToken,
+            });
+            return res;
+        } catch (err: any) {
+            const msg = err?.message ?? "";
+            lastError = err;
+
+            // Error 9007 / 2207027 → media aún no está listo para publicar
+            if (msg.includes("Media ID is not available") && attempt < maxAttempts) {
+                console.warn(
+                    `⏳ Media aún no está listo en IG (intento ${attempt}/${maxAttempts}). Reintentando en ${delayMs / 1000
+                    }s...`
+                );
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+                continue;
+            }
+
+            // Otros errores o último intento → se relanza
+            throw err;
+        }
+    }
+
+    throw lastError ?? new Error(
+        "No se pudo publicar el media en Instagram tras varios intentos."
+    );
+}
+
 /**
  * Get Page access token + IG Business Account ID from your Instagram_Access table.
  * We assume Instagram_Access.accessToken is a **user access token**.
@@ -286,16 +326,15 @@ export async function POST(req: Request) {
                 });
             }
 
-            const publishRes = await graphPost<{ id: string }>(
-                `/${igUserId}/media_publish`,
-                {
-                    creation_id: containerRes.id,
-                    access_token: pageAccessToken,
-                }
+            const publishRes = await publishWithRetry(
+                igUserId,
+                containerRes.id,
+                pageAccessToken
             );
 
             finalMediaId = publishRes.id;
             console.log("✅ IG single media published:", publishRes);
+
         } else {
             // ✅ Carousel flow: create one container per child with is_carousel_item=true
             const childrenIds: string[] = [];
@@ -353,16 +392,15 @@ export async function POST(req: Request) {
 
             console.log("✅ IG carousel container created:", carouselContainer);
 
-            const publishRes = await graphPost<{ id: string }>(
-                `/${igUserId}/media_publish`,
-                {
-                    creation_id: carouselContainer.id,
-                    access_token: pageAccessToken,
-                }
+            const publishRes = await publishWithRetry(
+                igUserId,
+                carouselContainer.id,
+                pageAccessToken
             );
 
             finalMediaId = publishRes.id;
             console.log("✅ IG carousel published:", publishRes);
+
         }
 
         // Try to fetch permalink (optional)

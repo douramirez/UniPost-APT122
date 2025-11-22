@@ -10,9 +10,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+// Tipos adaptados a lo que devuelve Prisma
 type Metric = {
   id: number | string;
-  network: "BLUESKY" | "INSTAGRAM";
+  network: string; // "BLUESKY" | "INSTAGRAM"
   likes: number;
   comments: number;
   shares: number;
@@ -29,18 +30,6 @@ type BskyProfile = {
   posts: number;
 };
 
-type BskyPostMetric = {
-  uri: string;
-  text: string;
-  createdAt: string | null;
-  likes: number;
-  replies: number;
-  reposts: number;
-  quotes: number;
-  views: number | null;
-  postTitle?: string;
-};
-
 type InstagramProfile = {
   username: string;
   name: string | null;
@@ -48,17 +37,6 @@ type InstagramProfile = {
   followers: number | null;
   follows: number | null;
   mediaCount: number | null;
-};
-
-type InstagramPostMetric = {
-  id: string;
-  caption: string | null;
-  likeCount: number;
-  commentsCount: number;
-  shares: number;
-  views: number | null;
-  createdAt: string | null;
-  postTitle?: string;
 };
 
 type TabKey = "GENERAL" | "BLUESKY" | "INSTAGRAM";
@@ -77,7 +55,10 @@ export default function DashboardPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("GENERAL");
 
-  // Load Bluesky profile stats
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Cargar perfil de Bluesky
   useEffect(() => {
     (async () => {
       try {
@@ -94,7 +75,7 @@ export default function DashboardPage() {
     })();
   }, []);
 
-  // Load Instagram profile stats
+  // Cargar perfil de Instagram
   useEffect(() => {
     (async () => {
       try {
@@ -114,87 +95,76 @@ export default function DashboardPage() {
     })();
   }, []);
 
-  // Load Bluesky + Instagram post metrics
-  useEffect(() => {
-    (async () => {
-      try {
-        const allMetrics: Metric[] = [];
+  // 🔄 CORRECCIÓN: Cargar métricas DESDE LA BASE DE DATOS LOCAL
+  const loadMetrics = async () => {
+    setLoading(true);
+    setError(null);
 
-        // BLUESKY
-        const resBsky = await fetch("/api/bsky/metrics");
-        const dataBsky = await resBsky.json();
+    try {
+      const res = await fetch("/api/metrics/list"); // Endpoint nuevo
+      const data = await res.json();
 
-        if (!dataBsky.ok) {
-          setError(dataBsky.error || "No se pudieron cargar las métricas de Bluesky");
-        } else {
-          const mappedBsky: Metric[] = (dataBsky.posts as BskyPostMetric[]).map(
-            (p, idx) => ({
-              id: `bsky-${idx}`,
-              network: "BLUESKY",
-              likes: p.likes,
-              comments: p.replies,
-              shares: p.reposts,
-              impressions: p.views, // null por ahora (Bluesky no expone views reales)
-              collectedAt: p.createdAt,
-              post: {
-                title: p.postTitle && p.postTitle.trim().length
-                  ? p.postTitle
-                  : p.text
-                  ? p.text.slice(0, 50) + (p.text.length > 50 ? "…" : "")
-                  : "(sin título)",
-                text: p.text,
-              },
-            })
-          );
-
-          allMetrics.push(...mappedBsky);
-        }
-
-        // INSTAGRAM
-        try {
-          const resIg = await fetch("/api/instagram/metrics");
-          const dataIg = await resIg.json();
-
-          if (dataIg.ok && Array.isArray(dataIg.posts)) {
-            const mappedIg: Metric[] = (dataIg.posts as InstagramPostMetric[]).map(
-              (p, idx) => ({
-                id: `ig-${idx}`,
-                network: "INSTAGRAM",
-                likes: p.likeCount,
-                comments: p.commentsCount,
-                shares: p.shares,
-                impressions: p.views,
-                collectedAt: p.createdAt,
-                post: {
-                  title:
-                    p.postTitle && p.postTitle.trim().length
-                      ? p.postTitle
-                      : p.caption
-                      ? p.caption.slice(0, 50) +
-                        (p.caption.length > 50 ? "…" : "")
-                      : "(sin título)",
-                  text: p.caption ?? undefined,
-                },
-              })
-            );
-            allMetrics.push(...mappedIg);
-          } else if (!dataIg.ok) {
-            // No matamos todo el dashboard si falla IG, solo anotamos error
-            console.error("Error métricas IG:", dataIg.error);
-          }
-        } catch (e) {
-          console.error("Error al cargar métricas de Instagram:", e);
-        }
-
-        setMetrics(allMetrics);
-      } catch (e: any) {
-        console.error(e);
-        setError(e.message ?? "Error desconocido");
-      } finally {
-        setLoading(false);
+      if (!data.ok) {
+        throw new Error(data.error || "No se pudieron cargar las métricas.");
       }
-    })();
+
+      // Mapear los datos que vienen de Prisma (Metric + Variant + Post) al formato de la UI
+      const mappedMetrics: Metric[] = data.metrics.map((m: any) => ({
+        id: m.id,
+        network: m.network,
+        likes: m.likes,
+        comments: m.comments,
+        shares: m.shares,
+        impressions: m.impressions,
+        collectedAt: m.collectedAt,
+        post: {
+          title: m.post?.title || "(Sin título)",
+          text: m.post?.body || "", // En Prisma tu modelo se llamaba 'body', en la UI usamos 'text'
+        },
+      }));
+
+      setMetrics(mappedMetrics);
+    } catch (e: any) {
+      console.error(e);
+      setError(e.message ?? "Error desconocido");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cargar métricas al montar
+  useEffect(() => {
+    loadMetrics();
   }, []);
+
+  // Función para SINCRONIZAR (Refresh) con APIs externas y actualizar BD
+  const handleRefreshMetrics = async () => {
+    try {
+      setSyncing(true);
+      setSyncMessage(null);
+
+      const res = await fetch("/api/metrics/refresh", {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "No se pudieron actualizar las métricas");
+      }
+
+      setSyncMessage(
+        `Sincronización completada. Procesados: ${data.processed ?? 0}.`
+      );
+
+      // Una vez actualizados los datos en la BD, recargamos la lista local
+      await loadMetrics();
+    } catch (e: any) {
+      console.error("Error al actualizar métricas:", e);
+      setSyncMessage(e.message ?? "Error al actualizar métricas");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Datos filtrados según pestaña
   const filteredMetrics =
@@ -202,6 +172,7 @@ export default function DashboardPage() {
       ? metrics
       : metrics.filter((m) => m.network === activeTab);
 
+  // Preparar datos para el gráfico
   const chartData = Object.values(
     filteredMetrics.reduce((acc: any, m) => {
       if (!acc[m.network])
@@ -224,7 +195,35 @@ export default function DashboardPage() {
         📈 Dashboard de Métricas
       </h1>
 
-      {/* Header con perfiles de Bluesky e Instagram */}
+      {/* Botón para actualizar métricas y guardarlas en la BD */}
+      <div className="max-w-5xl mx-auto mb-8 flex flex-col md:flex-row items-center justify-center gap-3">
+        <button
+          onClick={handleRefreshMetrics}
+          disabled={syncing}
+          className={`px-6 py-3 rounded-full text-sm font-bold border transition flex items-center gap-2 shadow-lg ${
+            syncing
+              ? "bg-white/20 border-white/40 text-white/70 cursor-wait"
+              : "bg-white text-purple-700 border-white hover:bg-purple-50 hover:scale-105"
+          }`}
+        >
+          {syncing ? (
+            <>
+              <span className="animate-spin">🔄</span> Sincronizando con redes...
+            </>
+          ) : (
+            <>
+              <span>🔄</span> Actualizar métricas
+            </>
+          )}
+        </button>
+        {syncMessage && (
+          <p className="text-xs md:text-sm text-white/90 bg-black/20 px-3 py-2 rounded-lg">
+            {syncMessage}
+          </p>
+        )}
+      </div>
+
+      {/* Header con perfiles */}
       <div className="max-w-5xl mx-auto mb-8 grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Bluesky */}
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg flex items-center gap-4">
@@ -247,32 +246,17 @@ export default function DashboardPage() {
                   {bskyProfile.displayName ?? bskyProfile.handle}
                 </p>
                 <p className="text-white/70 text-sm">@{bskyProfile.handle}</p>
-                <div className="flex gap-6 mt-2 text-sm">
-                  <div>
-                    <p className="font-bold">{bskyProfile.followers}</p>
-                    <p className="text-white/60 text-xs">Seguidores</p>
-                  </div>
-                  <div>
-                    <p className="font-bold">{bskyProfile.posts}</p>
-                    <p className="text-white/60 text-xs">Posts</p>
-                  </div>
-                </div>
               </div>
             </>
           ) : (
-            <p className="text-red-200 text-sm">
-              No se pudo cargar el perfil de Bluesky (¿está vinculada la
-              cuenta?).
-            </p>
+            <p className="text-red-200 text-sm">Perfil no disponible</p>
           )}
         </div>
 
         {/* Instagram */}
         <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg flex items-center gap-4">
           {loadingIgProfile ? (
-            <p className="text-white/70 text-sm">
-              Cargando perfil de Instagram…
-            </p>
+            <p className="text-white/70 text-sm">Cargando perfil de Instagram…</p>
           ) : igProfile ? (
             <>
               {igProfile.profilePictureUrl && (
@@ -290,32 +274,15 @@ export default function DashboardPage() {
                   {igProfile.name ?? igProfile.username}
                 </p>
                 <p className="text-white/70 text-sm">@{igProfile.username}</p>
-                <div className="flex gap-6 mt-2 text-sm">
-                  <div>
-                    <p className="font-bold">
-                      {igProfile.followers ?? "—"}
-                    </p>
-                    <p className="text-white/60 text-xs">Seguidores</p>
-                  </div>
-                  <div>
-                    <p className="font-bold">{igProfile.mediaCount ?? "—"}</p>
-                    <p className="text-white/60 text-xs">Publicaciones</p>
-                  </div>
-                </div>
               </div>
             </>
-          ) : igError ? (
-            <p className="text-red-200 text-sm">{igError}</p>
           ) : (
-            <p className="text-red-200 text-sm">
-              No se pudo cargar el perfil de Instagram (¿está vinculada la
-              cuenta?).
-            </p>
+            <p className="text-red-200 text-sm">Perfil no disponible</p>
           )}
         </div>
       </div>
 
-      {/* Tabs General / Bluesky / Instagram */}
+      {/* Tabs */}
       <div className="max-w-6xl mx-auto mb-6 flex justify-center gap-3">
         {(["GENERAL", "BLUESKY", "INSTAGRAM"] as TabKey[]).map((tab) => (
           <button
@@ -337,20 +304,24 @@ export default function DashboardPage() {
       </div>
 
       {loading ? (
-        <p className="text-center text-gray-200">Cargando métricas…</p>
-      ) : error && activeTab === "BLUESKY" ? (
-        <p className="text-center text-red-200">{error}</p>
+        <div className="text-center py-20">
+          <p className="text-xl text-white/70 animate-pulse">
+            Consultando base de datos...
+          </p>
+        </div>
+      ) : metrics.length === 0 ? (
+        <div className="text-center py-20 bg-white/5 rounded-2xl border border-white/10 max-w-4xl mx-auto">
+          <p className="text-xl text-white/80 mb-4">No hay métricas registradas.</p>
+          <p className="text-sm text-white/50">
+            Presiona el botón "Actualizar métricas" para descargar los datos más recientes.
+          </p>
+        </div>
       ) : (
         <div className="max-w-6xl mx-auto space-y-10">
-          {/* Tabla de métricas */}
+          {/* Tabla de métricas (BD) */}
           <div className="overflow-x-auto backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg">
             <h2 className="text-2xl font-semibold mb-4">
-              📋 Detalle de publicaciones{" "}
-              {activeTab === "GENERAL"
-                ? "(todas las redes)"
-                : activeTab === "BLUESKY"
-                ? "(Bluesky)"
-                : "(Instagram)"}
+              📋 Detalle de publicaciones
             </h2>
             <table className="w-full text-sm text-left text-white/90">
               <thead>
@@ -358,36 +329,45 @@ export default function DashboardPage() {
                   <th className="py-2">Red</th>
                   <th>Publicación</th>
                   <th>❤️ Likes</th>
-                  <th>💬 Comentarios</th>
+                  <th>💬 Coments</th>
                   <th>🔁 Shares</th>
                   <th>👀 Vistas</th>
-                  <th>Fecha</th>
+                  <th>Actualizado</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredMetrics.map((m) => (
                   <tr
                     key={m.id}
-                    className="border-b border-white/10 hover:bg-white/5"
+                    className="border-b border-white/10 hover:bg-white/5 transition-colors"
                   >
-                    <td className="py-2 align-top text-xs">
-                      {m.network === "BLUESKY" ? "Bluesky" : "Instagram"}
+                    <td className="py-3 align-top">
+                      <span
+                        className={`text-xs px-2 py-1 rounded font-bold ${
+                          m.network === "BLUESKY"
+                            ? "bg-blue-500/20 text-blue-200"
+                            : "bg-pink-500/20 text-pink-200"
+                        }`}
+                      >
+                        {m.network}
+                      </span>
                     </td>
-                    <td className="py-2 align-top">
-                      <p className="font-semibold">{m.post.title}</p>
+                    <td className="py-3 align-top max-w-xs">
+                      <p className="font-bold truncate">{m.post.title}</p>
                       {m.post.text && (
-                        <p className="text-xs text-white/70 mt-1 line-clamp-2">
+                        <p className="text-xs text-white/60 mt-1 line-clamp-2">
                           {m.post.text}
                         </p>
                       )}
                     </td>
-                    <td>{m.likes}</td>
-                    <td>{m.comments}</td>
-                    <td>{m.shares}</td>
-                    <td>{m.impressions ?? "—"}</td>
-                    <td>
+                    <td className="py-3 font-mono">{m.likes}</td>
+                    <td className="py-3 font-mono">{m.comments}</td>
+                    <td className="py-3 font-mono">{m.shares}</td>
+                    <td className="py-3 font-mono">{m.impressions ?? "-"}</td>
+                    <td className="py-3 text-xs text-white/50">
                       {m.collectedAt
-                        ? new Date(m.collectedAt).toLocaleString()
+                        ? new Date(m.collectedAt).toLocaleDateString() + " " +
+                          new Date(m.collectedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
                         : "—"}
                     </td>
                   </tr>
@@ -399,7 +379,7 @@ export default function DashboardPage() {
           {/* Gráfico */}
           <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-6 rounded-2xl shadow-lg">
             <h2 className="text-2xl font-semibold mb-4 text-center">
-              📊 Interacciones por red
+              📊 Interacciones Totales (Base de Datos)
             </h2>
             <div className="w-full h-80">
               <ResponsiveContainer width="100%" height="100%">
@@ -408,15 +388,24 @@ export default function DashboardPage() {
                   <YAxis stroke="#fff" />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "rgba(0,0,0,0.7)",
-                      borderRadius: "10px",
+                      backgroundColor: "rgba(0,0,0,0.8)",
+                      borderRadius: "12px",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      color: "#fff",
                     }}
                     cursor={{ fill: "rgba(255,255,255,0.1)" }}
                   />
                   <Bar
                     dataKey="likes"
+                    name="Likes"
                     fill="#ffb6ff"
-                    radius={[6, 6, 0, 0]}
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="comments"
+                    name="Comentarios"
+                    fill="#a78bfa"
+                    radius={[4, 4, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>

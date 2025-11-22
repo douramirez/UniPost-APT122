@@ -9,7 +9,7 @@ const MAX_BSKY_IMAGE_BYTES = 1_000_000; // ≈ 976.56 KiB
 export const runtime = "nodejs";
 
 const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://app.unipost.cl";
 
 function buildHashtagFacets(text: string) {
   const facets: any[] = [];
