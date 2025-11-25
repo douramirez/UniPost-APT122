@@ -1,5 +1,3 @@
-// src\app\(dashboard)\perfil\page.tsx
-
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -8,34 +6,79 @@ import toast from "react-hot-toast";
 import CuentasConectadas from "@/components/CuentasConectadas";
 
 export default function PerfilPage() {
-  const { data: session, update } = useSession(); // 👈 Importamos 'update' para refrescar sesión local
+  const { data: session, update } = useSession(); 
   const userEmail = session?.user?.email;
 
   const [activeTab, setActiveTab] = useState<"cuentas" | "perfil">("cuentas");
 
-  // --- ESTADOS DEL FORMULARIO DE PERFIL ---
+  // Estados Perfil
   const [newName, setNewName] = useState("");
   const [newImage, setNewImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // 🏢 Estado para el nombre de la Organización
+  const [orgName, setOrgName] = useState<string>("Cargando...");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Cargar datos iniciales cuando carga la sesión
+  // Cargar datos iniciales
   useEffect(() => {
     if (session?.user?.name) setNewName(session.user.name);
     if (session?.user?.image) setPreviewUrl(session.user.image);
   }, [session]);
 
-  // Manejar selección de imagen
+  // 🏢 Efecto para obtener el nombre de la organización
+  useEffect(() => {
+    if (!session?.user?.email) return;
+
+    async function fetchOrg() {
+        try {
+            // Llamamos a la API de equipos (que devuelve info de la org del usuario)
+            // Si esta ruta no te devuelve el nombre directo, podrías crear una ruta simple /api/user/me
+            // Pero usaremos la lógica de equipos que ya tienes.
+            const res = await fetch("/api/organizations"); // O /api/equipos según tu ruta
+            const json = await res.json();
+            
+            if (json.ok && json.data.userOrgId) {
+                // Si tiene ID, buscamos el nombre en la lista o usamos un dato directo si la API lo provee
+                // Si la API /api/organizations devuelve "metrics.organizationName" sería ideal.
+                // Si no, asumimos que si hay organizations listadas (admin) lo sacamos de ahí,
+                // o si eres miembro, la API debería devolver el nombre de TU org.
+                
+                // Opción A: Si la API devuelve el nombre directo (Ideal)
+                if (json.data.organizationName) {
+                    setOrgName(json.data.organizationName);
+                } 
+                // Opción B: Si devuelve lista de orgs y eres admin
+                else if (json.data.organizations) {
+                    const myOrg = json.data.organizations.find((o: any) => o.id === json.data.userOrgId);
+                    setOrgName(myOrg ? myOrg.name : "Independiente");
+                }
+                // Opción C: Fallback seguro (Si solo tenemos ID y no nombre, podrías necesitar ajustar la API)
+                else {
+                    // Si no podemos resolver el nombre aquí, mostramos "Mi Organización" o pedimos ajustar API
+                    // Para este ejemplo, asumiremos que "Independiente" es el default si no hay ID
+                    setOrgName("Mi Organización"); 
+                }
+            } else {
+                setOrgName("Independiente");
+            }
+        } catch (e) {
+            setOrgName("Independiente");
+        }
+    }
+    fetchOrg();
+  }, [session]);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setNewImage(file);
-      setPreviewUrl(URL.createObjectURL(file)); // Previsualización inmediata
+      setPreviewUrl(URL.createObjectURL(file)); 
     }
   };
 
-  // Manejar Guardado
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -49,14 +92,13 @@ export default function PerfilPage() {
     try {
       const res = await fetch("/api/profile/update", {
         method: "PUT",
-        body: formData, // Enviamos como FormData para soportar archivos
+        body: formData,
       });
 
       const data = await res.json();
 
       if (data.ok) {
         toast.success("Perfil actualizado correctamente ✅");
-        // Actualizamos la sesión del cliente para que se refleje en el Header al instante
         await update({
           ...session,
           user: {
@@ -83,7 +125,6 @@ export default function PerfilPage() {
             {/* --- HEADER --- */}
             <div className="relative inline-block group">
               <img
-                // Usamos la imagen de la sesión, el preview local, o el default
                 src={previewUrl || session.user?.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"}
                 alt="avatar"
                 className="mx-auto w-28 h-28 rounded-full border-4 border-white/30 shadow-lg mb-4 object-cover"
@@ -93,7 +134,11 @@ export default function PerfilPage() {
             <h1 className="text-3xl font-bold mb-1">
               👋 {session.user?.name || session.user?.email}
             </h1>
-            <p className="text-white/70 mb-6">Community Manager | UniPost</p>
+            
+            {/* 🏢 NOMBRE DE ORGANIZACIÓN DINÁMICO */}
+            <p className="text-white/70 mb-6 text-lg font-medium bg-white/10 inline-block px-4 py-1 rounded-full">
+              {orgName}
+            </p>
 
             {/* --- BOTONES DE ACCIÓN RÁPIDA --- */}
             <div className="flex flex-wrap justify-center gap-4 mb-10">
@@ -111,7 +156,6 @@ export default function PerfilPage() {
             {/* --- CONTENIDO --- */}
             {activeTab === "cuentas" && <CuentasConectadas userEmail={userEmail} />}
 
-            {/* --- FORMULARIO DE PERFIL ACTUALIZADO --- */}
             {activeTab === "perfil" && (
               <div className="max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4">
                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 shadow-xl border border-white/10 text-left">
@@ -119,7 +163,6 @@ export default function PerfilPage() {
                   
                   <form className="space-y-6" onSubmit={handleSaveProfile}>
                     
-                    {/* CAMBIO DE FOTO */}
                     <div className="flex flex-col items-center mb-6">
                       <div 
                         className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer group"
@@ -130,47 +173,24 @@ export default function PerfilPage() {
                            className="w-full h-full object-cover" 
                            alt="Preview" 
                          />
-                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">
-                           CAMBIAR
-                         </div>
+                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">CAMBIAR</div>
                       </div>
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept="image/*"
-                        onChange={handleImageChange}
-                      />
+                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageChange} />
                       <p className="text-xs text-white/50 mt-2">Click en la imagen para cambiarla</p>
                     </div>
 
-                    {/* CAMBIO DE NOMBRE */}
                     <div>
                       <label className="block text-sm text-gray-300 mb-2">Nombre de Usuario</label>
-                      <input 
-                        type="text" 
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        className="w-full p-3 rounded bg-black/20 border border-white/10 text-white focus:outline-none focus:border-white/50"
-                      />
+                      <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full p-3 rounded bg-black/20 border border-white/10 text-white focus:outline-none focus:border-white/50" />
                     </div>
                     
-                    {/* EMAIL (Read Only) */}
                     <div>
                       <label className="block text-sm text-gray-300 mb-2">Correo Electrónico</label>
-                      <input 
-                        type="email" 
-                        defaultValue={session.user?.email || ""}
-                        disabled
-                        className="w-full p-3 rounded bg-black/40 border border-white/5 text-white/50 cursor-not-allowed"
-                      />
+                      <input type="email" defaultValue={session.user?.email || ""} disabled className="w-full p-3 rounded bg-black/40 border border-white/5 text-white/50 cursor-not-allowed" />
                     </div>
 
                     <div className="flex justify-end pt-4">
-                      <button 
-                        disabled={isSaving}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold shadow-lg transition flex items-center gap-2"
-                      >
+                      <button disabled={isSaving} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold shadow-lg transition flex items-center gap-2">
                         {isSaving ? "Guardando..." : "💾 Guardar Cambios"}
                       </button>
                     </div>

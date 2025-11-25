@@ -20,8 +20,8 @@ export default function DashboardSidebar({
   const menuItems = [
     { href: "/", label: "🏠 Inicio" },
     { href: "/perfil", label: "👤 Perfil" },
-    { href: "/publicaciones", label: "📂 Publicaciones" },
     { href: "/composer", label: "✏️ Composer" },
+    { href: "/publicaciones", label: "📂 Publicaciones" },
     { href: "/equipos", label: "👥 Equipos" },
     { href: "/metricas", label: "📊 Métricas" },
   ];

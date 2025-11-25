@@ -1,164 +1,194 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; 
+// import { authOptions } from ...
 
-// Tipos de datos de las APIs externas
-type BskyPostMetric = {
-  uri: string;
-  text: string;
-  createdAt: string | null;
+type RemoteMetric = {
+  id: string;       
+  permalink?: string; 
   likes: number;
-  replies: number;
-  reposts: number;
-  quotes: number;
-  views: number | null;
-  postTitle?: string;
+  comments: number;
+  shares: number;
+  views: number;
+  createdAt?: string | Date; // 👈 NUEVO: Fecha real de publicación
 };
 
-type InstagramPostMetric = {
-  id: string;
-  caption: string | null;
-  likeCount: number;
-  commentsCount: number;
-  shares: number;
-  views: number | null;
-  createdAt: string | null;
-  postTitle?: string;
-};
+// Helper: Limpia URLs
+function normalizeUrl(url?: string | null) {
+    if (!url) return "";
+    try {
+        if (!url.includes("http")) return url.trim();
+        const urlObj = new URL(url);
+        const host = urlObj.hostname.replace(/^www\./, "");
+        return (host + urlObj.pathname).replace(/\/$/, "");
+    } catch {
+        return url.trim().replace(/\/$/, "");
+    }
+}
+
+// Helper: Extraer Shortcode
+function getIGShortcode(url?: string | null) {
+    if (!url) return null;
+    try {
+        const match = url.match(/\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : null;
+    } catch { return null; }
+}
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Seguridad: Obtener usuario y su Organización
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user?.email) {
-        return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const session = await getServerSession();
+    if (!session?.user?.email) return NextResponse.json({ ok: false }, { status: 401 });
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({ 
         where: { email: session.user.email },
-        select: { id: true, organizationId: true }
+        select: { id: true, organizationId: true } 
     });
 
-    if (!user || !user.organizationId) {
-        return NextResponse.json({ ok: false, error: "Usuario sin organización válida" }, { status: 400 });
-    }
+    if (!user) return NextResponse.json({ ok: false, error: "Usuario no encontrado" }, { status: 400 });
 
     const cookie = req.headers.get("cookie") ?? "";
     const baseUrl = process.env.INTERNAL_API_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`;
 
-    // 2. Obtener DATOS FRESCOS de las APIs externas
-    const [bskyRes, igRes] = await Promise.all([
-      fetch(`${baseUrl}/api/bsky/metrics`, { headers: { cookie } }),
-      fetch(`${baseUrl}/api/instagram/metrics`, { headers: { cookie } }),
+    console.log(`🔄 Refresh: Usuario ID ${user.id}. Solicitando datos...`);
+
+    // 1. Descargar datos
+    const [bskyRes, igRes, fbRes] = await Promise.all([
+        fetch(`${baseUrl}/api/bsky/metrics`, { headers: { cookie } }),
+        fetch(`${baseUrl}/api/instagram/metrics`, { headers: { cookie } }),
+        fetch(`${baseUrl}/api/facebook/metrics`, { headers: { cookie } }),
     ]);
 
     const bskyData = await bskyRes.json();
-    const igData = await igRes.json().catch(() => ({ ok: false as const, posts: [] as InstagramPostMetric[] }));
+    const igData = await igRes.json();
+    const fbData = await fbRes.json();
 
-    // Listas de posts vivos en las redes
-    const bskyPosts: BskyPostMetric[] = bskyData.ok ? bskyData.posts ?? [] : [];
-    const igPosts: InstagramPostMetric[] = igData.ok ? igData.posts ?? [] : [];
+    // 2. Construir Mapas
+    const bskyMap = new Map<string, RemoteMetric>();
+    const igMap = new Map<string, RemoteMetric>(); 
+    const fbMap = new Map<string, RemoteMetric>();
 
-    // 3. Crear MAPAS para búsqueda rápida (Eficiencia O(1))
-    // Clave: URI o ID -> Valor: Objeto de métricas
-    const bskyMap = new Map(bskyPosts.map(p => [p.uri, p]));
-    const igMap = new Map(igPosts.map(p => [p.id, p]));
+    // --- BLUESKY ---
+    if (bskyData.ok) {
+        bskyData.posts?.forEach((p: any) => {
+            bskyMap.set(p.uri, { 
+                id: p.uri, 
+                likes: p.likes, 
+                comments: p.comments, 
+                shares: p.shares, 
+                views: p.views,
+                createdAt: p.createdAt // Bluesky suele enviar esto
+            });
+        });
+    }
+    
+    // --- INSTAGRAM ---
+    if (igData.ok) {
+        igData.posts?.forEach((p: any) => {
+            const m: RemoteMetric = { 
+                id: p.id, 
+                permalink: p.permalink, 
+                likes: p.likes, 
+                comments: p.comments, 
+                shares: 0, 
+                views: 0,
+                createdAt: p.createdAt // 👈 Aquí capturamos la fecha que envía tu archivo
+            };
+            
+            igMap.set(p.id, m);
+            const shortcode = getIGShortcode(p.permalink);
+            if (shortcode) igMap.set(shortcode, m);
+        });
+    }
 
-    // 4. Obtener TODAS las variantes publicadas de NUESTRA BASE DE DATOS
-    const localVariants = await prisma.variant.findMany({
+    // --- FACEBOOK ---
+    if (fbData.ok) {
+        fbData.posts?.forEach((p: any) => {
+            const m: RemoteMetric = { 
+                id: p.id, 
+                likes: p.likes, 
+                comments: p.comments, 
+                shares: p.shares, 
+                views: 0,
+                createdAt: p.createdAt // Facebook también la envía
+            };
+            fbMap.set(p.id, m);
+            if (p.id.includes("_")) fbMap.set(p.id.split("_")[1], m);
+        });
+    }
+
+    // 3. Obtener Variantes
+    const variants = await prisma.variant.findMany({
         where: {
-            status: "PUBLISHED",
-            uri: { not: null }, // Solo las que tienen un ID externo
-            post: {
-                organizationId: user.organizationId // Solo de mi organización
-            }
+            OR: [ { uri: { not: null } }, { permalink: { not: null } } ],
+            post: { authorId: user.id }
         },
-        include: {
-            Metric: true // Incluimos la métrica actual si existe
-        }
+        include: { Metric: true }
     });
 
-    let updatedCount = 0;
-    let deletedCount = 0;
+    let updated = 0;
 
-    // 5. Comparar y Sincronizar (Update o Delete)
-    for (const variant of localVariants) {
-        if (!variant.uri) continue;
+    // 4. Matching y Actualización
+    for (const v of variants) {
+        let remote: RemoteMetric | undefined;
 
-        let remoteData: any = null;
-        let likes = 0, comments = 0, shares = 0, impressions = 0;
-
-        // A. Buscar en el Mapa correspondiente
-        if (variant.network === "BLUESKY") {
-            remoteData = bskyMap.get(variant.uri);
-            if (remoteData) {
-                const d = remoteData as BskyPostMetric;
-                likes = d.likes; comments = d.replies; shares = d.reposts + d.quotes; impressions = d.views ?? 0;
+        // Estrategias de Búsqueda
+        if (v.network === "BLUESKY" && v.uri) remote = bskyMap.get(v.uri);
+        else if (v.network === "INSTAGRAM") {
+            if (v.uri) remote = igMap.get(v.uri);
+            if (!remote && v.permalink) {
+                const sc = getIGShortcode(v.permalink);
+                if (sc) remote = igMap.get(sc);
             }
-        } else if (variant.network === "INSTAGRAM") {
-            remoteData = igMap.get(variant.uri);
-            if (remoteData) {
-                const d = remoteData as InstagramPostMetric;
-                likes = d.likeCount; comments = d.commentsCount; shares = d.shares; impressions = d.views ?? 0;
+        } 
+        else if (v.network === "FACEBOOK" && v.uri) {
+            remote = fbMap.get(v.uri);
+            if (!remote) {
+                for (const [key, val] of fbMap.entries()) {
+                    if (key.includes(v.uri) || v.uri.includes(key)) { remote = val; break; }
+                }
             }
         }
 
-        // B. Tomar decisión
-        if (remoteData) {
-            // ✅ EXISTE EN LA RED -> Actualizar o Crear Métrica
-            if (variant.Metric.length > 0) {
-                // Actualizar existente
-                await prisma.metric.update({
-                    where: { id: variant.Metric[0].id },
-                    data: { likes, comments, shares, impressions, collectedAt: new Date() }
-                });
+        if (remote) {
+            // Datos de métrica
+            const payload = {
+                likes: remote.likes,
+                comments: remote.comments,
+                shares: remote.shares,
+                impressions: remote.views || 0,
+                collectedAt: new Date()
+            };
+
+            // 🕒 ACTUALIZAR FECHA DE PUBLICACIÓN Y ESTADO
+            // Si la API trae fecha, actualizamos la variante para corregir datos antiguos
+            const updateData: any = { status: "PUBLISHED" };
+            if (remote.createdAt) {
+                updateData.date_sent = new Date(remote.createdAt);
+                // time_sent es Time en prisma, puede requerir formato específico o usarse date_sent para todo
+            }
+
+            await prisma.variant.update({ 
+                where: { id: v.id }, 
+                data: updateData
+            });
+
+            // Actualizar/Crear Métrica
+            if (v.Metric.length > 0) {
+                await prisma.metric.update({ where: { id: v.Metric[0].id }, data: payload });
             } else {
-                // Crear nueva si faltaba
                 await prisma.metric.create({
-                    data: {
-                        postId: variant.postId,
-                        variantId: variant.id,
-                        network: variant.network,
-                        likes, comments, shares, impressions, collectedAt: new Date()
-                    }
+                    data: { ...payload, variantId: v.id, postId: v.postId, network: v.network }
                 });
             }
-            updatedCount++;
-        } else {
-            // ❌ NO EXISTE EN LA RED (Fue eliminado) -> Borrar Métrica Local
-            if (variant.Metric.length > 0) {
-                // Borramos la métrica para que no sume en los reportes
-                await prisma.metric.delete({
-                    where: { id: variant.Metric[0].id }
-                });
-                
-                // Opcional: Cambiar estado de la variante a "DELETED" para saber que pasó
-                await prisma.variant.update({
-                    where: { id: variant.id },
-                    data: { status: "DELETED_ON_PLATFORM" }
-                });
-                
-                deletedCount++;
-            }
+            updated++;
         }
     }
 
-    return NextResponse.json({ 
-        ok: true, 
-        processed: updatedCount + deletedCount, 
-        updated: updatedCount,
-        deleted: deletedCount 
-    });
+    return NextResponse.json({ ok: true, processed: updated });
 
-  } catch (err: any) {
-    console.error("Error en /api/metrics/refresh:", err);
-    return NextResponse.json(
-      {
-        ok: false,
-        error: err instanceof Error ? err.message : "Error inesperado al actualizar métricas",
-      },
-      { status: 500 }
-    );
+  } catch (e: any) {
+    console.error("Fatal Error Refresh:", e);
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }
 }
