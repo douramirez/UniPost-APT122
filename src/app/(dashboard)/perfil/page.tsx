@@ -1,439 +1,186 @@
+// src\app\(dashboard)\perfil\page.tsx
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
+import toast from "react-hot-toast";
+import CuentasConectadas from "@/components/CuentasConectadas";
 
 export default function PerfilPage() {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession(); // 👈 Importamos 'update' para refrescar sesión local
+  const userEmail = session?.user?.email;
 
-  // --- BLUESKY state ---
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("");
-  const [linked, setLinked] = useState(false);
-  const [linkedUser, setLinkedUser] = useState("");
-  const [profile, setProfile] = useState<any>(null);
-  const [lastRefresh, setLastRefresh] = useState<number | null>(null);
-  const [refreshDisabled, setRefreshDisabled] = useState(false);
-  const [checkingLinkStatus, setCheckingLinkStatus] = useState(true);
-  const [checkingProfile, setCheckingProfile] = useState(true);
+  const [activeTab, setActiveTab] = useState<"cuentas" | "perfil">("cuentas");
 
-  // --- INSTAGRAM state ---
-  const [igLinked, setIgLinked] = useState(false);
-  const [igUsername, setIgUsername] = useState("");
-  const [igCheckingStatus, setIgCheckingStatus] = useState(true);
-  const [igStatus, setIgStatus] = useState("");
-  const [igLoading, setIgLoading] = useState(false);
-  // ------------------------
+  // --- ESTADOS DEL FORMULARIO DE PERFIL ---
+  const [newName, setNewName] = useState("");
+  const [newImage, setNewImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- INSTAGRAM profile data ---
-  const [igProfile, setIgProfile] = useState<any>(null);
-  const [igCheckingProfile, setIgCheckingProfile] = useState(false);
-  const [igLastRefresh, setIgLastRefresh] = useState<number | null>(null);
-  const [igRefreshDisabled, setIgRefreshDisabled] = useState(false);
-  // -------------------------------
-
-  // Busca estado de cuenta de BlueSky
+  // Cargar datos iniciales cuando carga la sesión
   useEffect(() => {
-    if (!session) return;
-
-    (async () => {
-      const res = await fetch("/api/bsky/status");
-      const data = await res.json();
-
-      if (data.ok && data.linked) {
-        setLinked(true);
-        setLinkedUser(data.nombreUsuario);
-        loadProfile().finally(() => setCheckingProfile(false));
-      }
-
-      setCheckingLinkStatus(false);
-    })();
+    if (session?.user?.name) setNewName(session.user.name);
+    if (session?.user?.image) setPreviewUrl(session.user.image);
   }, [session]);
 
-  // --- Busca estado de cuenta de Instagram ---
-    useEffect(() => {
-    if (!session) return;
+  // Manejar selección de imagen
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setNewImage(file);
+      setPreviewUrl(URL.createObjectURL(file)); // Previsualización inmediata
+    }
+  };
 
-    (async () => {
-      try {
-        const res = await fetch("/api/instagram/status");
-        const data = await res.json();
+  // Manejar Guardado
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
 
-        if (data.ok && data.linked) {
-          setIgLinked(true);
-          setIgUsername(data.username);
-          // cargar perfil en segundo plano
-          loadInstagramProfile();
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIgCheckingStatus(false);
-      }
-    })();
-  }, [session]);
-  // -------------------------------------------
-
-  // Envía credenciales y valida con Bluesky
-  async function handleCheckAndSave() {
-    setLoading(true);
-    setStatus("Verificando credenciales...");
+    const formData = new FormData();
+    formData.append("name", newName);
+    if (newImage) {
+      formData.append("file", newImage);
+    }
 
     try {
-      const res = await fetch("/api/bsky/check-and-save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
+      const res = await fetch("/api/profile/update", {
+        method: "PUT",
+        body: formData, // Enviamos como FormData para soportar archivos
       });
 
       const data = await res.json();
 
       if (data.ok) {
-        setStatus("✅ Cuenta Bluesky vinculada correctamente");
-        setLinked(true);
-        setLinkedUser(identifier);
+        toast.success("Perfil actualizado correctamente ✅");
+        // Actualizamos la sesión del cliente para que se refleje en el Header al instante
+        await update({
+          ...session,
+          user: {
+            ...session?.user,
+            name: data.user.name,
+            image: data.user.image,
+          },
+        });
       } else {
-        setStatus("❌ Error: " + (data.error || "Credenciales inválidas"));
+        toast.error("Error: " + data.error);
       }
-    } catch {
-      setStatus("⚠️ Error de conexión con el servidor");
-    }
-
-    setLoading(false);
-  }
-
-  // Desvincula Bluesky
-  async function handleUnlink() {
-    if (!confirm("¿Seguro que quieres desvincular tu cuenta de Bluesky?")) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/bsky/unlink", { method: "DELETE" });
-      const data = await res.json();
-      if (data.ok) {
-        setLinked(false);
-        setLinkedUser("");
-        setStatus("🔓 Cuenta Bluesky desvinculada");
-      } else {
-        setStatus("❌ Error al desvincular");
-      }
+    } catch (error) {
+      toast.error("Error de conexión");
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
-  }
-
-  // Cargar datos de perfil Bluesky
-  async function loadProfile() {
-    const res = await fetch("/api/bsky/profile");
-    const data = await res.json();
-    if (data.ok) {
-      setProfile(data.profile);
-    }
-  }
-
-  // Refresca datos de perfil Bluesky
-  async function handleRefresh() {
-    if (refreshDisabled) return;
-
-    await loadProfile();
-
-    setLastRefresh(Date.now());
-    setRefreshDisabled(true);
-
-    // Tiempo de espera para volver a actualizar
-    setTimeout(() => setRefreshDisabled(false), 5 * 60 * 1000);
-  }
-
-  // --- INSTAGRAM: iniciar flujo de vinculación (OAuth) ---
-  async function handleInstagramConnect() {
-    setIgLoading(true);
-    setIgStatus("Redirigiendo a Instagram...");
-
-    // Aquí simplemente redirigimos al backend que construye la URL de OAuth
-    window.location.href = "/api/instagram/connect";
-  }
-
-  // --- INSTAGRAM: desvincular ---
-  async function handleInstagramUnlink() {
-    if (!confirm("¿Seguro que quieres desvincular tu cuenta de Instagram?")) return;
-
-    setIgLoading(true);
-    try {
-      const res = await fetch("/api/instagram/unlink", { method: "DELETE" });
-      const data = await res.json();
-      if (data.ok) {
-        setIgLinked(false);
-        setIgUsername("");
-        setIgStatus("🔓 Cuenta de Instagram desvinculada");
-      } else {
-        setIgStatus("❌ Error al desvincular Instagram");
-      }
-    } catch {
-      setIgStatus("⚠️ Error de conexión con el servidor");
-    } finally {
-      setIgLoading(false);
-    }
-  }
-  // -------------------------------------------------------
-  
-  // Cargar datos de perfil de Instagram
-  async function loadInstagramProfile() {
-    setIgCheckingProfile(true);
-    try {
-      const res = await fetch("/api/instagram/profile");
-      const data = await res.json();
-      if (data.ok && data.profile) {
-        setIgProfile(data.profile);
-      } else {
-        console.warn("No se pudo cargar perfil IG:", data.error);
-      }
-    } catch (err) {
-      console.error("Error cargando perfil IG:", err);
-    } finally {
-      setIgCheckingProfile(false);
-    }
-  }
-
-  async function handleInstagramRefresh() {
-    if (igRefreshDisabled) return;
-
-    await loadInstagramProfile();
-    setIgLastRefresh(Date.now());
-    setIgRefreshDisabled(true);
-    setTimeout(() => setIgRefreshDisabled(false), 5 * 60 * 1000);
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-600 text-white p-10">
-      <div className="max-w-5xl mx-auto text-center">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-800 text-white p-10">
+      <div className="max-w-6xl mx-auto text-center">
         {session ? (
           <>
-            <img
-              src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-              alt="avatar"
-              className="mx-auto w-28 h-28 rounded-full border-4 border-white/30 shadow-lg mb-4"
-            />
+            {/* --- HEADER --- */}
+            <div className="relative inline-block group">
+              <img
+                // Usamos la imagen de la sesión, el preview local, o el default
+                src={previewUrl || session.user?.image || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"}
+                alt="avatar"
+                className="mx-auto w-28 h-28 rounded-full border-4 border-white/30 shadow-lg mb-4 object-cover"
+              />
+            </div>
+            
             <h1 className="text-3xl font-bold mb-1">
               👋 {session.user?.name || session.user?.email}
             </h1>
             <p className="text-white/70 mb-6">Community Manager | UniPost</p>
 
+            {/* --- BOTONES DE ACCIÓN RÁPIDA --- */}
             <div className="flex flex-wrap justify-center gap-4 mb-10">
-              <a href="/composer" className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition">
-                ✏️ Ir al Composer
-              </a>
-              <a href="/metricas" className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition">
-                📊 Ver métricas
-              </a>
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition"
-              >
-                🚪 Cerrar sesión
-              </button>
+              <a href="/composer" className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition">✏️ Ir al Composer</a>
+              <a href="/metricas" className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition">📊 Ver métricas</a>
+              <button onClick={() => signOut({ callbackUrl: "/" })} className="bg-white/20 hover:bg-white/30 text-sm px-5 py-2 rounded-lg transition">🚪 Cerrar sesión</button>
             </div>
 
-            {/* CONTENEDOR DE CONEXIONES */}
-            <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-              {/* Bluesky */}
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8">
-                <h2 className="text-2xl font-bold mb-4">🦋 Vincular Bluesky</h2>
-                {/* Cobertura mientras se verifica el estado de la cuenta */}
-                {checkingLinkStatus ? (
-                  <p className="text-white/70 text-sm animate-pulse">
-                    🔄 Revisando estado de la cuenta...
-                  </p>
-                ) : linked ? (
-                  <>
-                    <p className="text-green-400 font-semibold mb-4">
-                      ✅ Ya vinculado como <span className="underline">{linkedUser}</span>
-                    </p>
+            {/* --- NAVEGACIÓN --- */}
+            <div className="flex justify-center gap-2 mb-8 border-b border-white/10 pb-1">
+              <button onClick={() => setActiveTab("cuentas")} className={`px-6 py-2 rounded-t-lg font-bold transition-all ${activeTab === "cuentas" ? "bg-white/20 text-white border-b-2 border-white" : "text-white/50 hover:bg-white/5 hover:text-white"}`}>🔗 Cuentas Conectadas</button>
+              <button onClick={() => setActiveTab("perfil")} className={`px-6 py-2 rounded-t-lg font-bold transition-all ${activeTab === "perfil" ? "bg-white/20 text-white border-b-2 border-white" : "text-white/50 hover:bg-white/5 hover:text-white"}`}>👤 Datos de Perfil</button>
+            </div>
 
-                    {/* PROFILE CARD */}
-                    {checkingProfile ? (
-                      <p className="text-white/70 text-sm animate-pulse mb-4">
-                        ⏳ Cargando datos del perfil...
-                      </p>
-                    ) : profile && (
-                      <div className="bg-white/10 p-4 rounded-xl mb-4 text-left">
-                        <div className="flex items-center gap-4">
-                          <img
-                            src={profile.avatar}
-                            className="w-16 h-16 rounded-full border border-white/20"
-                            alt="Avatar de Bluesky"
-                          />
-                          <div>
-                            <p className="text-lg font-bold">{profile.displayName}</p>
-                            <p className="text-white/70">@{profile.handle}</p>
-                          </div>
-                        </div>
+            {/* --- CONTENIDO --- */}
+            {activeTab === "cuentas" && <CuentasConectadas userEmail={userEmail} />}
 
-                        <div className="flex justify-around mt-4 text-white/90">
-                          <div>
-                            <p className="font-bold">{profile.followers}</p>
-                            <p className="text-xs text-white/60">Followers</p>
-                          </div>
-                          <div>
-                            <p className="font-bold">{profile.posts}</p>
-                            <p className="text-xs text-white/60">Posts</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={handleRefresh}
-                          disabled={refreshDisabled}
-                          className={`mt-4 w-full py-2 rounded-lg font-semibold transition-all ${
-                            refreshDisabled
-                              ? "bg-green-800 opacity-50 cursor-not-allowed"
-                              : "bg-green-500 hover:bg-green-600"
-                          }`}
-                        >
-                          {refreshDisabled ? "⏳ Espera 5 minutos" : "🔄 Actualizar datos"}
-                        </button>
+            {/* --- FORMULARIO DE PERFIL ACTUALIZADO --- */}
+            {activeTab === "perfil" && (
+              <div className="max-w-xl mx-auto animate-in fade-in slide-in-from-bottom-4">
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 shadow-xl border border-white/10 text-left">
+                  <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">👤 Editar Perfil</h2>
+                  
+                  <form className="space-y-6" onSubmit={handleSaveProfile}>
+                    
+                    {/* CAMBIO DE FOTO */}
+                    <div className="flex flex-col items-center mb-6">
+                      <div 
+                        className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer group"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                         <img 
+                           src={previewUrl || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"} 
+                           className="w-full h-full object-cover" 
+                           alt="Preview" 
+                         />
+                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">
+                           CAMBIAR
+                         </div>
                       </div>
-                    )}
-                    <button
-                      onClick={handleUnlink}
-                      disabled={loading}
-                      className="w-full bg-gradient-to-r from-red-500 to-pink-600 py-3 rounded font-semibold hover:opacity-90 transition"
-                    >
-                      {loading ? "Procesando..." : "Desvincular cuenta"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {/* Campos para enlazar cuenta Bluesky */}
-                    <a href="https://bsky.app/settings/app-passwords">
-                      <p className="text-white/70 mb-6">Consigue tu clave de aplicación aquí</p>
-                    </a>
-                    <input
-                      type="text"
-                      placeholder="Email o handle (ej: user.bsky.social)"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      className="w-full p-3 mb-3 rounded bg-white/10 border border-white/20 placeholder-gray-300"
-                    />
-                    <input
-                      type="password"
-                      placeholder="App Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 placeholder-gray-300"
-                    />
-                    <button
-                      onClick={handleCheckAndSave}
-                      disabled={loading}
-                      className="w-full bg-gradient-to-r from-sky-500 to-blue-600 py-3 rounded font-semibold hover:opacity-90 transition"
-                    >
-                      {loading ? "Verificando..." : "Verificar y Guardar"}
-                    </button>
-                  </>
-                )}
-                {status && <p className="mt-4 text-sm text-white/80">{status}</p>}
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={handleImageChange}
+                      />
+                      <p className="text-xs text-white/50 mt-2">Click en la imagen para cambiarla</p>
+                    </div>
+
+                    {/* CAMBIO DE NOMBRE */}
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Nombre de Usuario</label>
+                      <input 
+                        type="text" 
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        className="w-full p-3 rounded bg-black/20 border border-white/10 text-white focus:outline-none focus:border-white/50"
+                      />
+                    </div>
+                    
+                    {/* EMAIL (Read Only) */}
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Correo Electrónico</label>
+                      <input 
+                        type="email" 
+                        defaultValue={session.user?.email || ""}
+                        disabled
+                        className="w-full p-3 rounded bg-black/40 border border-white/5 text-white/50 cursor-not-allowed"
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                      <button 
+                        disabled={isSaving}
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg font-bold shadow-lg transition flex items-center gap-2"
+                      >
+                        {isSaving ? "Guardando..." : "💾 Guardar Cambios"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
-
-              {/* Instagram */}
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8">
-                <h2 className="text-2xl font-bold mb-4">📸 Vincular Instagram</h2>
-
-                {igCheckingStatus ? (
-  <p className="text-white/70 text-sm animate-pulse">
-    🔄 Revisando estado de la cuenta...
-  </p>
-) : igLinked ? (
-  <>
-    <p className="text-green-400 font-semibold mb-4">
-      ✅ Instagram vinculado como{" "}
-      <span className="underline">@{igUsername}</span>
-    </p>
-
-    {/* Tarjeta de perfil IG */}
-    {igCheckingProfile ? (
-      <p className="text-white/70 text-sm animate-pulse mb-4">
-        ⏳ Cargando datos del perfil de Instagram...
-      </p>
-    ) : (
-      igProfile && (
-        <div className="bg-white/10 p-4 rounded-xl mb-4 text-left">
-          <div className="flex items-center gap-4">
-            <img
-              src={igProfile.profilePictureUrl || "https://cdn-icons-png.flaticon.com/512/733/733558.png"}
-              className="w-16 h-16 rounded-full border border-white/20"
-              alt="Avatar de Instagram"
-            />
-            <div>
-              <p className="text-lg font-bold">@{igProfile.username}</p>
-              <p className="text-white/70 text-xs">
-                Última actualización:{" "}
-                {igLastRefresh
-                  ? new Date(igLastRefresh).toLocaleTimeString()
-                  : "ahora"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-around mt-4 text-white/90">
-            <div>
-              <p className="font-bold">
-                {igProfile.followers.toLocaleString("es-CL")}
-              </p>
-              <p className="text-xs text-white/60">Followers</p>
-            </div>
-            <div>
-              <p className="font-bold">
-                {igProfile.posts.toLocaleString("es-CL")}
-              </p>
-              <p className="text-xs text-white/60">Posts</p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleInstagramRefresh}
-            disabled={igRefreshDisabled}
-            className={`mt-4 w-full py-2 rounded-lg font-semibold transition-all ${
-              igRefreshDisabled
-                ? "bg-pink-800 opacity-50 cursor-not-allowed"
-                : "bg-pink-500 hover:bg-pink-600"
-            }`}
-          >
-            {igRefreshDisabled ? "⏳ Espera 5 minutos" : "🔄 Actualizar datos"}
-          </button>
-        </div>
-      )
-    )}
-
-    <button
-      onClick={handleInstagramUnlink}
-      disabled={igLoading}
-      className="w-full bg-gradient-to-r from-red-500 to-pink-600 py-3 rounded font-semibold hover:opacity-90 transition"
-    >
-      {igLoading ? "Procesando..." : "Desvincular Instagram"}
-    </button>
-  </>
-) : (
-  <>
-    <p className="text-white/70 mb-6 text-sm">
-      Para publicar en Instagram, primero debes conectar una cuenta Profesional
-      (Business/Creator) vinculada a una página de Facebook.
-    </p>
-    <button
-      onClick={handleInstagramConnect}
-      disabled={igLoading}
-      className="w-full bg-gradient-to-r from-pink-500 to-yellow-500 py-3 rounded font-semibold hover:opacity-90 transition"
-    >
-      {igLoading ? "Redirigiendo..." : "🔗 Conectar con Instagram"}
-    </button>
-  </>
-)}
-                {igStatus && <p className="mt-4 text-sm text-white/80">{igStatus}</p>}
-              </div>
-            </div>
+            )}
           </>
         ) : (
-          <p className="text-white/80">
-            Inicia sesión para ver tu perfil y tus métricas.
-          </p>
+          <p className="text-white/80">Inicia sesión para ver tu perfil.</p>
         )}
       </div>
     </div>

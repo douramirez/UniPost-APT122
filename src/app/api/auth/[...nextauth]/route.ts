@@ -29,10 +29,17 @@ export const authOptions: NextAuthOptions = {
 
         // ⛔ Bloquear si NO está verificado
         if (!user.emailVerified) {
-          throw new Error("EMAIL_NOT_VERIFIED"); // Aquí se lanza el error
+          throw new Error("EMAIL_NOT_VERIFIED");
         }
 
-        return user;
+        // ✅ CAMBIO 1: Retornar explícitamente los datos, incluyendo la imagen
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          image: user.image, // 👈 Importante: Pasar la imagen de la BD al flujo
+        };
       },
     }),
   ],
@@ -49,16 +56,31 @@ export const authOptions: NextAuthOptions = {
       return true;
     },
 
-    async jwt({ token, user }) {
+    // ✅ CAMBIO 2: Guardar la imagen en el token y soportar actualizaciones
+    async jwt({ token, user, trigger, session }) {
       if (user) {
+        token.id = user.id;
         token.emailVerified = user.emailVerified;
+        token.picture = user.image; // 👈 Guardamos la imagen en el token
+        token.name = user.name;
       }
+
+      // Si se dispara "update" desde el cliente (perfil), actualizamos el token
+      if (trigger === "update" && session) {
+        token.name = session.user.name;
+        token.picture = session.user.image;
+      }
+
       return token;
     },
 
+    // ✅ CAMBIO 3: Pasar la imagen del token a la sesión final
     async session({ session, token }) {
       if (session.user) {
+        session.user.id = token.id as number;
         session.user.emailVerified = token.emailVerified;
+        session.user.image = token.picture;
+        session.user.name = token.name;
       }
       return session;
     },

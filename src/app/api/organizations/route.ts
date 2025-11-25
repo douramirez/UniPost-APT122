@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { prisma } from "@/lib/prisma"; // Asegúrate de importar tu instancia de prisma correctamente
+import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-// Helper para serializar BigInt a String/Number (JSON no soporta BigInt nativo)
+// Helper para serializar BigInt
 function serializeBigInt(obj: any) {
   return JSON.parse(
     JSON.stringify(obj, (key, value) =>
@@ -13,7 +13,8 @@ function serializeBigInt(obj: any) {
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(); // Agrega authOptions si aplica
+
   if (!session || !session.user?.email) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
@@ -42,22 +43,15 @@ export async function GET(request: Request) {
       isSuperAdmin,
       userOrgId: user.organizationId,
       members: [],
-      orphanedUsers: [], // 👈 Inicializamos array vacío
+      orphanedUsers: [],
     };
 
     if (isSuperAdmin) {
-      const allOrgs = await prisma.organization.findMany({
-        orderBy: { id: 'asc' },
-      });
+      const allOrgs = await prisma.organization.findMany({ orderBy: { id: 'asc' } });
       responseData.organizations = allOrgs;
 
-      // 👇 NUEVO: Buscar usuarios sin organización (huérfanos)
       const orphans = await prisma.user.findMany({
-        where: { 
-          organizationId: null,
-          // Opcional: filtrar para no mostrar otros super admins sin org
-          // roleID: { lt: 4 } 
-        },
+        where: { organizationId: null },
         select: { id: true, name: true, email: true, roleID: true },
         orderBy: { id: 'desc' }
       });
@@ -65,40 +59,30 @@ export async function GET(request: Request) {
     }
 
     if (targetOrgId) {
-      // 1. Métricas Globales (Totales)
-      // Nota: Aquí ya estábamos contando Variantes, así que esto se queda igual.
+      // 1. Métricas Globales
       const metricsAggregate = await prisma.metric.aggregate({
         _sum: { likes: true, comments: true },
         where: { post: { organizationId: targetOrgId } },
       });
 
       const publishedCount = await prisma.variant.count({
-        where: {
-          status: "PUBLISHED",
-          post: { organizationId: targetOrgId },
-        },
+        where: { status: "PUBLISHED", post: { organizationId: targetOrgId } },
       });
 
       responseData.metrics = {
         likes: metricsAggregate._sum.likes || 0,
         comments: metricsAggregate._sum.comments || 0,
-        publishedPosts: publishedCount, // Total global de variants
+        publishedPosts: publishedCount,
         organizationId: targetOrgId,
       };
 
-      // 2. 👥 CALCULAR ESTADÍSTICAS POR MIEMBRO (CORREGIDO)
+      // 2. Estadísticas por Miembro
       const orgPosts = await prisma.post.findMany({
         where: { organizationId: targetOrgId },
         select: {
           authorId: true,
-          // 👇 AHORA TRAEMOS LAS VARIANTES PUBLICADAS
-          variants: {
-            where: { status: "PUBLISHED" },
-            select: { id: true } // Solo necesitamos contar, el ID es suficiente
-          },
-          metrics: {
-            select: { likes: true },
-          },
+          variants: { where: { status: "PUBLISHED" }, select: { id: true } },
+          metrics: { select: { likes: true } },
         },
       });
 
@@ -108,29 +92,34 @@ export async function GET(request: Request) {
         if (!statsByAuthor[post.authorId]) {
           statsByAuthor[post.authorId] = { posts: 0, likes: 0 };
         }
-        
-        // 🛠️ CORRECCIÓN AQUÍ:
-        // Antes sumábamos 1 (el post padre).
-        // Ahora sumamos la cantidad de variantes publicadas que tiene ese post.
         statsByAuthor[post.authorId].posts += post.variants.length;
-        
-        // Sumar likes (se mantiene igual)
         const totalPostLikes = post.metrics.reduce((acc, m) => acc + m.likes, 0);
         statsByAuthor[post.authorId].likes += totalPostLikes;
       }
 
-      // Obtener datos de usuario
+      // 3. Obtener Miembros con ROL (JOIN)
       const dbMembers = await prisma.user.findMany({
         where: { organizationId: targetOrgId },
-        select: { id: true, name: true, email: true, roleID: true },
+        select: { 
+            id: true, 
+            name: true, 
+            email: true, 
+            roleID: true,
+            image: true, // Foto de perfil
+            // 👇 Traemos el nombre del rol
+            Role: {
+                select: { nombre: true }
+            }
+        },
       });
 
-      // Mapear respuesta
       responseData.members = dbMembers.map((member) => ({
         id: member.id,
         name: member.name || "Sin nombre",
         email: member.email,
         roleId: member.roleID,
+        roleName: member.Role?.nombre || "Sin Rol", // 👈 Mapeamos el nombre
+        image: member.image,
         totalPosts: statsByAuthor[member.id]?.posts || 0,
         totalLikes: statsByAuthor[member.id]?.likes || 0,
       }));

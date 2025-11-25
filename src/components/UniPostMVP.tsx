@@ -42,7 +42,7 @@ type NewMedia = {
   order: number; 
 };
 
-const ALL_NETWORKS = ["INSTAGRAM", "BLUESKY"] as const;
+const ALL_NETWORKS = ["INSTAGRAM", "BLUESKY", "FACEBOOK"] as const;
 
 // 🌎 Zonas horarias para el Scheduler
 const TIMEZONES = [
@@ -491,23 +491,24 @@ export default function ComposerPage() {
                     copy[i].network = e.target.value;
                     setVariants(copy);
                   }}
-                  className="p-3 bg-white/10 border border-white/20 text-white rounded-lg focus:ring-2 focus:ring-purple-300"
+                  className="p-3 bg-white/10 border border-white/20 text-black rounded-lg focus:ring-2 focus:ring-purple-300"
                 >
                   <option>INSTAGRAM</option>
                   <option>BLUESKY</option>
+                  <option>FACEBOOK</option>
                 </select>
                 <textarea
                   value={v.text}
                   onChange={(e) => handleVariantTextChange(i, e)}
                   placeholder={`Texto para ${v.network}`}
                   rows={1}
-                  className="flex-1 p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-300 resize-none overflow-hidden leading-relaxed"
+                  className="flex-1 p-3 rounded-lg bg-white/10 border border-white/20 text-black placeholder-gray-300 resize-none overflow-hidden leading-relaxed"
                 />
                 {variants.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeVariant(i)}
-                    className="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm text-white"
+                    className="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm text-black"
                   >
                     −
                   </button>
@@ -520,7 +521,7 @@ export default function ComposerPage() {
               <div className="flex gap-3 items-center">
                 <select
                   id="newNetwork"
-                  className="p-3 bg-white/30 border border-white/40 text-white rounded-lg focus:ring-2 focus:ring-purple-400"
+                  className="p-3 bg-white/30 border border-white/40 text-black rounded-lg focus:ring-2 focus:ring-purple-400"
                   defaultValue=""
                 >
                   <option value="" disabled>

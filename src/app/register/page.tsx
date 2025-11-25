@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import Link from "next/link";
+import Image from "next/image";
+import UniPostLogo from "../assets/UniPost.png";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -21,8 +24,7 @@ export default function RegisterPage() {
     return name.trim().length >= 2;
   };
 
-  // 📝 DEFINIMOS LOS REQUISITOS INDIVIDUALES
-  // Esto nos permite verificar uno por uno para la lista visual
+  // Lista de requisitos
   const requirements = [
     { label: "Mínimo 8 caracteres", valid: password.length >= 8 },
     { label: "Una letra mayúscula", valid: /[A-Z]/.test(password) },
@@ -31,7 +33,6 @@ export default function RegisterPage() {
     { label: "Un carácter especial (@$!%*?&)", valid: /[@$!%*?&]/.test(password) },
   ];
 
-  // Función para validar todo junto al enviar
   const isPasswordValid = () => {
     return requirements.every((req) => req.valid);
   };
@@ -41,7 +42,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     if (!validateEmail(email)) {
-      toast.error("❌ El correo debe ser válido (ej. example@gmail.com)");
+      toast.error("❌ El correo debe ser válido.");
       setLoading(false);
       return;
     }
@@ -52,9 +53,8 @@ export default function RegisterPage() {
       return;
     }
 
-    // Verificamos si todos los requisitos se cumplen
     if (!isPasswordValid()) {
-      toast.error("❌ La contraseña no cumple con todos los requisitos.");
+      toast.error("❌ La contraseña no cumple con los requisitos.");
       setLoading(false);
       return;
     }
@@ -81,51 +81,77 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-700 via-purple-700 to-pink-600 text-white">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-700 via-purple-700 to-pink-600 text-white p-4">
+      
+      {/* 🔙 Botón Volver al Inicio */}
+      <Link 
+        href="/" 
+        className="mb-6 flex items-center gap-2 text-white/80 hover:text-white transition-all bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full backdrop-blur-sm border border-white/10 text-sm font-medium shadow-lg hover:-translate-y-0.5"
+      >
+        <span>←</span> Volver al Inicio
+      </Link>
+
       <form
         onSubmit={handleRegister}
-        className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl border border-white/20 text-white w-96"
+        className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border border-white/20 text-white w-full max-w-sm flex flex-col"
       >
-        <h1 className="text-3xl font-bold mb-6 text-center">Crear Cuenta</h1>
+        {/* 📛 Logo + UniPost */}
+        <div className="flex flex-col items-center justify-center mb-6">
+            <div className="bg-white/20 p-3 rounded-2xl shadow-inner mb-3">
+                <Image
+                    src={UniPostLogo}
+                    alt="UniPost Logo"
+                    width={64}
+                    height={64}
+                    className="h-12 w-12 drop-shadow-md"
+                />
+            </div>
+            <h1 className="text-2xl font-black tracking-wide">UniPost</h1>
+            <p className="text-white/60 text-sm">Crea tu cuenta</p>
+        </div>
 
-        <input
-          type="text"
-          placeholder="Nombre de Usuario"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          required
-        />
+        {/* Inputs */}
+        <div className="space-y-4 mb-4">
+            <input
+            type="text"
+            placeholder="Nombre de Usuario"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full p-3 rounded-xl bg-black/20 border border-white/10 placeholder-gray-400 focus:outline-none focus:border-white/40 focus:bg-black/30 transition"
+            required
+            />
 
-        <input
-          type="email"
-          placeholder="Correo electrónico"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          required
-        />
+            <input
+            type="email"
+            placeholder="Correo electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-3 rounded-xl bg-black/20 border border-white/10 placeholder-gray-400 focus:outline-none focus:border-white/40 focus:bg-black/30 transition"
+            required
+            />
 
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-3 mb-2 rounded bg-white/10 border border-white/20 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
-          required
-        />
+            <input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-3 rounded-xl bg-black/20 border border-white/10 placeholder-gray-400 focus:outline-none focus:border-white/40 focus:bg-black/30 transition"
+            required
+            />
+        </div>
 
         {/* ✅ LISTA DE CONDICIONES VISUAL */}
-        <div className="mb-6 bg-black/20 p-3 rounded-lg border border-white/10 mt-4">
-          <p className="text-xs text-gray-300 mb-2 font-semibold uppercase tracking-wide">
+        <div className="mb-6 bg-black/20 p-4 rounded-xl border border-white/5">
+          <p className="text-xs text-gray-400 mb-2 font-bold uppercase tracking-wide">
             Requisitos de seguridad:
           </p>
           <ul className="space-y-1">
             {requirements.map((req, index) => (
               <li
                 key={index}
-                className={`text-sm flex items-center gap-2 transition-all duration-300 ${req.valid ? "text-green-400 font-medium" : "text-gray-400"
-                  }`}
+                className={`text-xs flex items-center gap-2 transition-all duration-300 ${
+                  req.valid ? "text-green-400 font-medium" : "text-gray-400"
+                }`}
               >
                 <span>{req.valid ? "✅" : "○"}</span>
                 {req.label}
@@ -137,14 +163,14 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 py-3 rounded font-semibold hover:opacity-90 transition shadow-lg mt-2"
+          className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 py-3 rounded-xl font-bold hover:opacity-90 hover:scale-[1.02] transition shadow-lg disabled:opacity-60 disabled:scale-100"
         >
           {loading ? "Creando..." : "Registrarse"}
         </button>
 
-        <p className="text-center mt-4 text-sm text-gray-200">
+        <p className="text-center mt-6 text-sm text-gray-300">
           ¿Ya tienes cuenta?{" "}
-          <a href="/login" className="underline text-white hover:text-gray-300">
+          <a href="/login" className="text-white font-semibold hover:underline hover:text-indigo-200 transition">
             Inicia sesión aquí
           </a>
         </p>

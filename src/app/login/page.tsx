@@ -1,10 +1,12 @@
-// /app/login/page.tsx
-
 "use client";
+
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
+import Link from "next/link";
+import Image from "next/image";
+import UniPostLogo from "../assets/UniPost.png";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -23,65 +25,92 @@ export default function LoginPage() {
     });
 
     if (res?.error === "EMAIL_NOT_VERIFIED") {
-      // Si el correo no está verificado, redirigir a la página de verificación
-      toast.error("Tu correo no está verificado. Revisa tu correo o vuelve a enviar el código.");
-      router.push(`/verificar?email=${email}`); // Redirige a /verification con el correo del usuario
+      toast.error("Tu correo no está verificado. Revisa tu correo.");
+      router.push(`/verificar?email=${email}`);
       setLoading(false);
       return;
     }
 
     if (res?.ok) {
-      router.push("/composer"); // Redirige a la página de composición
+      router.push("/composer");
     } else {
-      toast.error("❌ Error: Credenciales incorrectas" );
+      toast.error("❌ Error: Credenciales incorrectas");
     }
 
     setLoading(false);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700">
+    // Agregamos 'flex-col' para apilar el botón y el formulario verticalmente
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 p-4">
+      
+      {/* 🔙 Botón Volver al Inicio (Ahora centrado arriba) */}
+      <Link 
+        href="/" 
+        className="mb-6 flex items-center gap-2 text-white/80 hover:text-white transition-all bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full backdrop-blur-sm border border-white/10 text-sm font-medium shadow-lg hover:-translate-y-0.5"
+      >
+        <span>←</span> Volver al Inicio
+      </Link>
+
       <form
         onSubmit={handleLogin}
-        className="bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl border border-white/20 text-white w-96"
+        className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border border-white/20 text-white w-full max-w-sm flex flex-col"
       >
-        <h1 className="text-3xl font-bold mb-6 text-center">Iniciar Sesión</h1>
+        {/* 📛 Logo + UniPost */}
+        <div className="flex flex-col items-center justify-center mb-6">
+            <div className="bg-white/20 p-3 rounded-2xl shadow-inner mb-3">
+                <Image
+                    src={UniPostLogo}
+                    alt="UniPost Logo"
+                    width={64}
+                    height={64}
+                    className="h-12 w-12 drop-shadow-md"
+                />
+            </div>
+            <h1 className="text-2xl font-black tracking-wide">UniPost</h1>
+            <p className="text-white/60 text-sm">Bienvenido de vuelta</p>
+        </div>
 
-        <input
-          type="email"
-          placeholder="Correo"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 placeholder-gray-300"
-          required
-        />
+        {/* Inputs */}
+        <div className="space-y-4 mb-6">
+            <input
+            type="email"
+            placeholder="Correo electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-3 rounded-xl bg-black/20 border border-white/10 placeholder-gray-400 focus:outline-none focus:border-white/40 focus:bg-black/30 transition"
+            required
+            />
 
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-3 mb-6 rounded bg-white/10 border border-white/20 placeholder-gray-300"
-          required
-        />
+            <input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-3 rounded-xl bg-black/20 border border-white/10 placeholder-gray-400 focus:outline-none focus:border-white/40 focus:bg-black/30 transition"
+            required
+            />
+        </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 py-3 rounded font-semibold hover:opacity-90 transition disabled:opacity-60"
+          className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 py-3 rounded-xl font-bold hover:opacity-90 hover:scale-[1.02] transition shadow-lg disabled:opacity-60 disabled:scale-100"
         >
-          {loading ? "Ingresando..." : "Entrar"}
+          {loading ? "Ingresando..." : "Iniciar Sesión"}
         </button>
 
-        <p className="text-center mt-6 text-sm text-gray-200">
-          ¿No tienes cuenta?{" "}
-          <a
-            href="/register"
-            className="text-white font-semibold underline hover:text-indigo-200 transition"
-          >
-            Regístrate aquí
-          </a>
-        </p>
+        <div className="mt-6 text-center space-y-2">
+            <p className="text-sm text-gray-300">
+            ¿No tienes cuenta?{" "}
+            <a
+                href="/register"
+                className="text-white font-semibold hover:underline hover:text-indigo-200 transition"
+            >
+                Regístrate aquí
+            </a>
+            </p>
+        </div>
       </form>
     </div>
   );

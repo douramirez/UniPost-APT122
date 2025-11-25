@@ -43,3 +43,4 @@ next-env.d.ts
 /src/generated/prisma
 /public/uploads
 /src/structure.txt
+/src/app/estructura.txt
