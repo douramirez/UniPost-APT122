@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { encrypt } from "@/lib/crypto";
 
 const FB_VERSION = process.env.FACEBOOK_API_VERSION ?? "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${FB_VERSION}`;
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
           userId: appUserId,
           redSocial: 3,
           usuarioRed: pageName,
-          accessToken: longToken,
+          accessToken: encrypt(longToken),
         },
       });
     }

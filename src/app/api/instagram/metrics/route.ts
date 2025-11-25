@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { decrypt } from "@/lib/crypto";
 
 const GRAPH_BASE_URL = "https://graph.facebook.com/v21.0";
 
@@ -28,7 +29,7 @@ async function getInstagramCredentialsForUser(userId: number) {
     );
   }
 
-  const userAccessToken = igAccess.accessToken;
+  const userAccessToken = decrypt(igAccess.accessToken);
 
   const url = new URL(`${GRAPH_BASE_URL}/me/accounts`);
   url.searchParams.set(

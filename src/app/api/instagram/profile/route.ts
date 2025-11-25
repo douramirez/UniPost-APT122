@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { decrypt } from "@/lib/crypto"; // ✅ Importado correctamente
 
 const FB_VERSION = process.env.FACEBOOK_API_VERSION ?? "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${FB_VERSION}`;
@@ -40,7 +41,6 @@ async function graph<T>(
   return json as T;
 }
 
-// same idea as in your callback, but without Prisma stuff
 async function getInstagramAccount(accessToken: string) {
   // 1) Intentar páginas del usuario
   const mePages = await graph<{ data?: { id: string; name: string }[] }>(
@@ -124,16 +124,17 @@ export async function GET(req: NextRequest) {
       where: { userId: user.id, redSocial: 2 },
     });
 
-    if (!igAccess) {
+    if (!igAccess || !igAccess.accessToken) {
       return NextResponse.json(
         { ok: false, linked: false, error: "INSTAGRAM_NOT_LINKED" },
         { status: 200 }
       );
     }
 
-    const longLivedToken = igAccess.accessToken!;
+    // 🔐 CAMBIO CRÍTICO: Desencriptar el token antes de usarlo
+    const longLivedToken = decrypt(igAccess.accessToken);
 
-    // sacamos el IG user id de nuevo (mismo truco que en el callback)
+    // sacamos el IG user id de nuevo (usando el token desencriptado)
     const { igUserId } = await getInstagramAccount(longLivedToken);
 
     // ahora pedimos datos del IG User

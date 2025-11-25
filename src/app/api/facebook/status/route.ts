@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-// Ajusta esta importación según tu configuración real. 
-// En tu archivo enviado usabas 'auth' directo, pero en anteriores usabas getServerSession.
-// Si usas NextAuth v4 estándar:
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 

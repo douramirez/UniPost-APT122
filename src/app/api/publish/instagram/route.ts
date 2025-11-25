@@ -1,6 +1,9 @@
+// src\app\api\publish\instagram\route.ts
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
+import { decrypt } from "@/lib/crypto";
 
 const GRAPH_BASE_URL = "https://graph.facebook.com/v21.0";
 
@@ -123,7 +126,10 @@ async function getInstagramCredentialsForUser(userId: number): Promise<{
         );
     }
 
-    const userAccessToken = igAccess.accessToken;
+    // 🔐 DESENCRIPTAMOS EL TOKEN AQUÍ
+    // Si el token en la BD no está encriptado (formato antiguo), esto fallará.
+    // Asegúrate de reconectar la cuenta para guardar el token nuevo encriptado.
+    const userAccessToken = decrypt(igAccess.accessToken);
 
     const url = new URL(`${GRAPH_BASE_URL}/me/accounts`);
     url.searchParams.set(

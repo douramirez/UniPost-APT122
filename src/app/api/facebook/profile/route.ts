@@ -1,7 +1,10 @@
+// src\app\api\facebook\profile\route.ts
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { decrypt } from "@/lib/crypto";
 
 const GRAPH_VERSION = process.env.FACEBOOK_API_VERSION ?? "v21.0";
 
@@ -30,10 +33,11 @@ export async function GET() {
     // Solicitamos datos de la página (la ID 'me' se refiere a la página porque usamos el Page Access Token o el User Token con contexto)
     // Nota: Si guardaste el User Token, 'me' es el usuario. Si guardaste el Page Token, 'me' es la página.
     // Asumiremos que necesitamos ir a /me/accounts para obtener datos frescos o usar el ID si lo guardamos.
-    
+    const rawToken = decrypt(fbAccess.accessToken);
+
     // Si guardaste el token de usuario (Long Lived User Token), consultamos las cuentas:
     const accountsRes = await fetch(
-        `https://graph.facebook.com/${GRAPH_VERSION}/me/accounts?access_token=${fbAccess.accessToken}`
+        `https://graph.facebook.com/${GRAPH_VERSION}/me/accounts?access_token=${rawToken}`
     );
     const accountsData = await accountsRes.json();
     
