@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
   // Crear el usuario en la base de datos
   const user = await prisma.user.create({
-    data: { email, password: hashed, name, emailVerified: null },  // emailVerified en null
+    data: { email, password: hashed, name, emailVerified: null, roleID: 1 }, 
   });
 
   // Generar el código de verificación (6 dígitos)

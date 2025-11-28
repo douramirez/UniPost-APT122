@@ -23,7 +23,6 @@ async function graph<T>(
 
   const res = await fetch(url.toString());
   const text = await res.text();
-  console.log(`📘 [IG profile] ${path} →`, text);
 
   let json: any;
   try {

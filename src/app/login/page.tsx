@@ -42,19 +42,19 @@ export default function LoginPage() {
 
   return (
     // Agregamos 'flex-col' para apilar el botón y el formulario verticalmente
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 p-4">
       
       {/* 🔙 Botón Volver al Inicio (Ahora centrado arriba) */}
       <Link 
         href="/" 
-        className="mb-6 flex items-center gap-2 text-white/80 hover:text-white transition-all bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full backdrop-blur-sm border border-white/10 text-sm font-medium shadow-lg hover:-translate-y-0.5"
+        className="mb-6 flex items-center gap-2 text-slate-200/80 hover:text-slate-200 transition-all bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full backdrop-blur-sm border border-white/10 text-sm font-medium shadow-lg hover:-translate-y-0.5"
       >
         <span>←</span> Volver al Inicio
       </Link>
 
       <form
         onSubmit={handleLogin}
-        className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border border-white/20 text-white w-full max-w-sm flex flex-col"
+        className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border border-white/20 text-slate-200 w-full max-w-sm flex flex-col"
       >
         {/* 📛 Logo + UniPost */}
         <div className="flex flex-col items-center justify-center mb-6">
@@ -68,7 +68,7 @@ export default function LoginPage() {
                 />
             </div>
             <h1 className="text-2xl font-black tracking-wide">UniPost</h1>
-            <p className="text-white/60 text-sm">Bienvenido de vuelta</p>
+            <p className="text-slate-200/60 text-sm">Bienvenido de vuelta</p>
         </div>
 
         {/* Inputs */}
@@ -95,7 +95,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 py-3 rounded-xl font-bold hover:opacity-90 hover:scale-[1.02] transition shadow-lg disabled:opacity-60 disabled:scale-100"
+          className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold hover:opacity-90 hover:scale-[1.02] transition shadow-lg disabled:opacity-60 disabled:scale-100"
         >
           {loading ? "Ingresando..." : "Iniciar Sesión"}
         </button>
@@ -105,7 +105,7 @@ export default function LoginPage() {
             ¿No tienes cuenta?{" "}
             <a
                 href="/register"
-                className="text-white font-semibold hover:underline hover:text-indigo-200 transition"
+                className="text-slate-200 font-semibold hover:underline hover:text-indigo-200 transition"
             >
                 Regístrate aquí
             </a>

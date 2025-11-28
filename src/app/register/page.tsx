@@ -81,19 +81,19 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-700 via-purple-700 to-pink-600 text-white p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-slate-200 p-4">
       
       {/* 🔙 Botón Volver al Inicio */}
       <Link 
         href="/" 
-        className="mb-6 flex items-center gap-2 text-white/80 hover:text-white transition-all bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full backdrop-blur-sm border border-white/10 text-sm font-medium shadow-lg hover:-translate-y-0.5"
+        className="mb-6 flex items-center gap-2 text-slate-200/80 hover:text-slate-200 transition-all bg-black/10 hover:bg-black/20 px-5 py-2 rounded-full backdrop-blur-sm border border-white/10 text-sm font-medium shadow-lg hover:-translate-y-0.5"
       >
         <span>←</span> Volver al Inicio
       </Link>
 
       <form
         onSubmit={handleRegister}
-        className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border border-white/20 text-white w-full max-w-sm flex flex-col"
+        className="bg-white/10 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border border-white/20 text-slate-200 w-full max-w-sm flex flex-col"
       >
         {/* 📛 Logo + UniPost */}
         <div className="flex flex-col items-center justify-center mb-6">
@@ -107,7 +107,7 @@ export default function RegisterPage() {
                 />
             </div>
             <h1 className="text-2xl font-black tracking-wide">UniPost</h1>
-            <p className="text-white/60 text-sm">Crea tu cuenta</p>
+            <p className="text-slate-200/60 text-sm">Crea tu cuenta</p>
         </div>
 
         {/* Inputs */}
@@ -163,14 +163,14 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 py-3 rounded-xl font-bold hover:opacity-90 hover:scale-[1.02] transition shadow-lg disabled:opacity-60 disabled:scale-100"
+          className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold hover:opacity-90 hover:scale-[1.02] transition shadow-lg disabled:opacity-60 disabled:scale-100"
         >
           {loading ? "Creando..." : "Registrarse"}
         </button>
 
         <p className="text-center mt-6 text-sm text-gray-300">
           ¿Ya tienes cuenta?{" "}
-          <a href="/login" className="text-white font-semibold hover:underline hover:text-indigo-200 transition">
+          <a href="/login" className="text-slate-200 font-semibold hover:underline hover:text-indigo-200 transition">
             Inicia sesión aquí
           </a>
         </p>

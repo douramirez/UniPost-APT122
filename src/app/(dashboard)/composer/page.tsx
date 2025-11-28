@@ -1,5 +1,3 @@
-// src\app\(dashboard)\composer\page.tsx
-
 "use client";
 
 import { useState, useEffect, type ChangeEvent } from "react";
@@ -22,10 +20,10 @@ type NewMedia = {
   order: number; 
 };
 
-const ALL_NETWORKS = ["INSTAGRAM", "BLUESKY", "FACEBOOK"] as const;
+const ALL_NETWORKS = ["INSTAGRAM", "BLUESKY", "FACEBOOK", "TIKTOK"] as const;
 const CATEGORIES = ["Ilustración", "Evento", "Emprendimiento", "Entretenimiento", "Otro"];
 
-// Usamos IANA IDs para calcular hora real
+// Zonas horarias IANA
 const TIMEZONES = [
   { label: "Santiago / Buenos Aires", id: "America/Santiago" },
   { label: "Bogotá / Lima / Quito", id: "America/Bogota" },
@@ -46,8 +44,8 @@ export default function ComposerPage() {
   // Estados Formulario
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [category, setCategory] = useState("Otro"); // 👈 Global
-  const [visible, setVisible] = useState(false);    // 👈 Global
+  const [category, setCategory] = useState("Otro");
+  const [visible, setVisible] = useState(false);
   
   const [variants, setVariants] = useState<Variant[]>([{ network: "INSTAGRAM", text: "" }]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +58,7 @@ export default function ComposerPage() {
   const [zona, setZona] = useState("America/Santiago");
   const [now, setNow] = useState(new Date());
 
-  // Reloj en vivo para las zonas horarias
+  // Reloj en vivo
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
@@ -73,6 +71,95 @@ export default function ComposerPage() {
       }).format(now);
     } catch (e) { return "--:--"; }
   };
+
+  // --- LÓGICA DE RESTRICCIONES ---
+  const calculateRestrictions = () => {
+    const networks = variants.map(v => v.network);
+    
+    // Valores base (máximos posibles)
+    let maxImages = 10; 
+    let maxVideos = 1;
+    let allowMix = true;
+    let minMedia = 0;
+
+    // Aplicamos restricciones según las redes activas (Regla del más estricto)
+    
+    // TIKTOK: Solo permite video (por ahora en esta integración)
+    if (networks.includes("TIKTOK")) {
+        maxImages = 0; // Bloquea imágenes
+        minMedia = Math.max(minMedia, 1); // Exige al menos 1 archivo
+        allowMix = false; 
+    }
+
+    // BLUESKY: Máximo 4 imágenes, no mezcla
+    if (networks.includes("BLUESKY")) {
+        maxImages = Math.min(maxImages, 4); 
+        allowMix = false;
+    }
+
+    // INSTAGRAM: Máximo 10, permite mezcla (Carrusel), exige 1 archivo
+    if (networks.includes("INSTAGRAM")) {
+        // No baja maxImages de 10
+        // allowMix sigue true (a menos que TikTok o Bluesky lo hayan puesto en false)
+        minMedia = Math.max(minMedia, 1);
+    }
+
+    return { maxImages, maxVideos, allowMix, minMedia };
+  };
+
+  const restrictions = calculateRestrictions();
+
+  function canAddMedia(file: File, currentMedias: NewMedia[]) {
+    const isVideo = file.type.startsWith("video");
+    const isImage = file.type.startsWith("image");
+
+    if (!isVideo && !isImage) return { ok: false, reason: "Archivo no soportado." };
+
+    const imageCount = currentMedias.filter(m => m.type === "image").length + (isImage ? 1 : 0);
+    const videoCount = currentMedias.filter(m => m.type === "video").length + (isVideo ? 1 : 0);
+
+    // Validar Límites Numéricos
+    if (isImage && imageCount > restrictions.maxImages) return { ok: false, reason: `Límite de imágenes excedido (${restrictions.maxImages}).` };
+    if (isVideo && videoCount > restrictions.maxVideos) return { ok: false, reason: `Límite de videos excedido (${restrictions.maxVideos}).` };
+
+    // Validar Mezcla
+    if (!restrictions.allowMix) {
+        const hasImages = currentMedias.some(m => m.type === "image") || isImage;
+        const hasVideos = currentMedias.some(m => m.type === "video") || isVideo;
+        if (hasImages && hasVideos) return { ok: false, reason: "Las redes seleccionadas no permiten mezclar fotos y videos." };
+    }
+
+    return { ok: true };
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+
+    const check = canAddMedia(selected, medias);
+    if (!check.ok) {
+      toast.error(check.reason || "Error");
+      e.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      const isVideo = selected.type.startsWith("video");
+      const newMedia: NewMedia = {
+        id: crypto.randomUUID(),
+        file: selected,
+        previewUrl: URL.createObjectURL(selected),
+        base64,
+        type: isVideo ? "video" : "image",
+        order: medias.length,
+      };
+      setMedias((prev) => [...prev, newMedia]);
+      e.target.value = "";
+    };
+    reader.readAsDataURL(selected);
+  }
 
   // --- Helpers de Media ---
   function moveMedia(index: number, direction: "left" | "right") {
@@ -92,58 +179,16 @@ export default function ComposerPage() {
     });
   }
 
-  function hasNetwork(network: string) { return variants.some((v) => v.network === network); }
-
-  function canAddMedia(file: File, currentMedias: NewMedia[]) {
-    const isVideo = file.type.startsWith("video");
-    const isImage = file.type.startsWith("image");
-    if (!isVideo && !isImage) return { ok: false, reason: "Solo se permiten imágenes o videos." };
-    
-    const hasInstagram = hasNetwork("INSTAGRAM");
-    const hasBluesky = hasNetwork("BLUESKY");
-    const imageCount = currentMedias.filter((m) => m.type === "image").length;
-    const videoCount = currentMedias.filter((m) => m.type === "video").length;
-
-    if (hasInstagram && currentMedias.length >= 10) return { ok: false, reason: "Instagram: máx 10 archivos." };
-    if (hasBluesky) {
-      if (isVideo) {
-        if (videoCount >= 1) return { ok: false, reason: "Bluesky: solo 1 video." };
-        if (imageCount > 0) return { ok: false, reason: "Bluesky: no mezclar video/imagen." };
-      } else {
-        if (videoCount > 0) return { ok: false, reason: "Bluesky: no mezclar imagen/video." };
-        if (imageCount >= 4) return { ok: false, reason: "Bluesky: máx 4 imágenes." };
-      }
-    }
-    return { ok: true };
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
-    const check = canAddMedia(selected, medias);
-    if (!check.ok) { toast.error(check.reason || "Error"); e.target.value = ""; return; }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result as string;
-      const isVideo = selected.type.startsWith("video");
-      const newMedia: NewMedia = {
-        id: crypto.randomUUID(),
-        file: selected,
-        previewUrl: URL.createObjectURL(selected),
-        base64,
-        type: isVideo ? "video" : "image",
-        order: medias.length,
-      };
-      setMedias((prev) => [...prev, newMedia]);
-      e.target.value = "";
-    };
-    reader.readAsDataURL(selected);
-  }
-
   // --- SUBMIT ---
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
+    if (medias.length < restrictions.minMedia) {
+        toast.error(`Debes subir al menos ${restrictions.minMedia} archivo(s) para continuar.`);
+        setLoading(false);
+        return;
+    }
 
     let schedulePayload = null;
     if (agendar) {
@@ -163,8 +208,8 @@ export default function ComposerPage() {
       organizationId: 1, 
       title,
       body,
-      category, // 👈 Global
-      visible,  // 👈 Global
+      category, 
+      visible,  
       variants,
       medias: medias.sort((a, b) => a.order - b.order).map((m) => ({
           base64: m.base64, type: m.type, order: m.order,
@@ -205,7 +250,6 @@ export default function ComposerPage() {
 
   function removeVariant(index: number) {
     setVariants(variants.filter((_, i) => i !== index));
-    setMedias([]); 
   }
 
   const updateVariant = (index: number, field: keyof Variant, value: any) => {
@@ -215,191 +259,233 @@ export default function ComposerPage() {
     setVariants(newVariants);
   };
 
+  // Filtramos las redes disponibles usando la constante global
   const usedNetworks = variants.map((v) => v.network);
   const availableNetworks = ALL_NETWORKS.filter((net) => !usedNetworks.includes(net));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-700 via-indigo-700 to-blue-700 text-white py-10 px-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {session && (
           <div className="flex justify-between items-center mb-6">
              <p>👋 Hola, <span className="font-bold">{session.user?.name}</span></p>
              <div className="flex gap-3">
-               <a href="/publicaciones" className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition">📂 Biblioteca</a>
-               <a href="/perfil" className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition">👤 Perfil</a>
-               <button onClick={() => signOut({ callbackUrl: "/" })} className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm transition">🚪 Salir</button>
+               <a href="/publicaciones" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm transition">📂 Biblioteca</a>
+               <a href="/perfil" className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm transition">👤 Perfil</a>
+               <button onClick={() => signOut({ callbackUrl: "/" })} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg text-sm transition">🚪 Salir</button>
              </div>
           </div>
         )}
 
         <h1 className="text-4xl font-bold mb-8 text-center tracking-tight">Crear nueva publicación</h1>
 
-        <div className="backdrop-blur-xl bg-white/10 border border-white/20 p-8 rounded-2xl shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex flex-col lg:flex-row gap-8">
             
-            {/* SECCIÓN PRINCIPAL */}
-            <div className="space-y-4">
-                <input
-                  className="w-full p-4 rounded-xl bg-black/20 border border-white/10 text-white placeholder-white/40 focus:bg-black/40 outline-none"
-                  placeholder="Título interno..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
+            {/* FORMULARIO PRINCIPAL */}
+            <div className="flex-1 backdrop-blur-xl bg-white/5 border border-white/10 p-8 rounded-2xl shadow-2xl">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 
-                <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1">
-                        <textarea
-                        className="w-full p-4 rounded-xl bg-black/20 border border-white/10 text-white placeholder-white/40 focus:bg-black/40 outline-none h-40 resize-none"
-                        placeholder="Texto principal..."
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                        required
-                        />
-                    </div>
+                {/* Título y Cuerpo */}
+                <div className="space-y-4">
+                    <input
+                      className="w-full p-4 rounded-xl bg-black/20 border border-white/10 text-slate-200 placeholder-white/40 focus:bg-black/40 outline-none"
+                      placeholder="Título interno..."
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                    />
                     
-                    {/* CONFIGURACIÓN GLOBAL (Categoría y Visibilidad) */}
-                    <div className="md:w-64 flex flex-col gap-4 bg-black/20 p-4 rounded-xl border border-white/5">
-                        {/* Categoría */}
-                        <div className="flex flex-col gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase">Categoría</label>
-                            <select 
-                                value={category} 
-                                onChange={(e) => setCategory(e.target.value)}
-                                className="w-full p-2 rounded-lg bg-white/10 border border-white/10 text-white text-sm focus:bg-black/40 outline-none"
-                            >
-                                {CATEGORIES.map(cat => (
-                                    <option key={cat} value={cat} className="bg-gray-900 text-white">{cat}</option>
-                                ))}
-                            </select>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="flex-1">
+                            <textarea
+                            className="w-full p-4 rounded-xl bg-black/20 border border-white/10 text-slate-200 placeholder-white/40 focus:bg-black/40 outline-none h-40 resize-none"
+                            placeholder="Texto principal..."
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                            required
+                            />
                         </div>
+                        
+                        {/* Configuración Global */}
+                        <div className="md:w-64 flex flex-col gap-4 bg-black/20 p-4 rounded-xl border border-white/5">
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-bold text-slate-400 uppercase">Categoría</label>
+                                <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 rounded-lg bg-white/10 border border-white/10 text-slate-200 text-sm focus:bg-black/40 outline-none">
+                                    {CATEGORIES.map(cat => <option key={cat} value={cat} className="bg-gray-900 text-slate-200">{cat}</option>)}
+                                </select>
+                            </div>
 
-                        {/* Visibilidad */}
-                        <div className="flex flex-col gap-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase">Visibilidad</label>
-                            <div className="flex items-center gap-2 relative group">
-                                <label className="flex items-center gap-2 cursor-pointer text-sm text-white select-none">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={visible}
-                                        onChange={(e) => setVisible(e.target.checked)}
-                                        className="w-4 h-4 accent-green-500 rounded"
-                                    />
-                                    Mostrar en Feed
-                                </label>
-                                
-                                {/* Icono Info con Tooltip */}
-                                <div className="bg-white/20 text-white/80 rounded-full w-4 h-4 flex items-center justify-center text-xs cursor-help font-serif italic">i</div>
-                                <div className="absolute bottom-full right-0 mb-2 w-64 bg-black/95 border border-white/20 text-xs text-white p-3 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
-                                    Si tu publicación está configurada como visible otros usuarios podrán ver las publicaciones que has realizado a través de UniPost en el feed presente en el inicio. Asegúrate de que el contenido que definas visible cumpla con los términos y condiciones respecto al contenido en nuestra plataforma.
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-bold text-slate-400 uppercase">Visibilidad</label>
+                                <div className="flex items-center gap-2 relative group">
+                                    <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-200 select-none">
+                                        <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} className="w-4 h-4 accent-green-500 rounded" />
+                                        Mostrar en Feed
+                                    </label>
+                                    <div className="bg-white/20 text-slate-200/80 rounded-full w-4 h-4 flex items-center justify-center text-xs cursor-help font-serif italic">i</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Multimedia */}
-            <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-              <label className="block text-sm font-bold mb-3 text-gray-200">📎 Multimedia</label>
-              <input type="file" accept="image/*,video/*" onChange={handleFileChange} className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-500 file:text-white cursor-pointer" />
-              {medias.length > 0 && (
-                <div className="mt-4 flex gap-4 overflow-x-auto pb-2">
-                  {medias.sort((a, b) => a.order - b.order).map((m, index) => (
-                      <div key={m.id} className="relative min-w-[150px] max-w-[150px] aspect-square border border-white/20 bg-black/40 rounded-xl flex flex-col items-center justify-center overflow-hidden group">
-                        <span className="absolute top-1 left-2 text-xs bg-black/70 px-2 py-0.5 rounded-full z-10">#{index + 1}</span>
-                        {m.type === "video" ? <video src={m.previewUrl} className="w-full h-full object-cover opacity-80" /> : <img src={m.previewUrl} alt="prev" className="w-full h-full object-cover opacity-80" />}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-                          <button type="button" onClick={() => moveMedia(index, "left")} disabled={index === 0} className="p-1 text-gray-300 hover:text-white">◀</button>
-                          <button type="button" onClick={() => removeMedia(index)} className="p-1 bg-red-500/80 rounded-full text-white text-xs">🗑️</button>
-                          <button type="button" onClick={() => moveMedia(index, "right")} disabled={index === medias.length - 1} className="p-1 text-gray-300 hover:text-white">▶</button>
+                {/* Multimedia */}
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="block text-sm font-bold text-slate-200">📎 Multimedia</label>
+                    <span className="text-xs text-slate-400">{medias.length} archivo(s) seleccionados</span>
+                  </div>
+                  
+                  <input type="file" accept="image/*,video/*" onChange={handleFileChange} className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white cursor-pointer hover:file:bg-indigo-500 transition" />
+                  
+                  {medias.length > 0 && (
+                    <div className="mt-4 flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/20">
+                      {medias.sort((a, b) => a.order - b.order).map((m, index) => (
+                          <div key={m.id} className="relative min-w-[120px] max-w-[120px] aspect-square border border-white/10 bg-black/40 rounded-xl flex flex-col items-center justify-center overflow-hidden group">
+                            <span className="absolute top-1 left-2 text-[10px] bg-black/70 px-1.5 py-0.5 rounded-full z-10 text-white">#{index + 1}</span>
+                            {m.type === "video" ? <video src={m.previewUrl} className="w-full h-full object-cover opacity-80" /> : <img src={m.previewUrl} alt="prev" className="w-full h-full object-cover opacity-80" />}
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+                              <button type="button" onClick={() => moveMedia(index, "left")} disabled={index === 0} className="p-1 text-gray-300 hover:text-white disabled:opacity-30">◀</button>
+                              <button type="button" onClick={() => removeMedia(index)} className="p-1 bg-red-500/80 rounded-full text-white text-xs">🗑️</button>
+                              <button type="button" onClick={() => moveMedia(index, "right")} disabled={index === medias.length - 1} className="p-1 text-gray-300 hover:text-white disabled:opacity-30">▶</button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Redes y Configuración (AJUSTADO: Selector arriba del texto) */}
+                <div className="space-y-4">
+                    <label className="block text-sm font-bold text-slate-200">🌍 Variantes por Red</label>
+                    {variants.map((v, i) => (
+                      <div key={i} className="flex flex-col gap-3 bg-black/20 p-4 rounded-xl border border-white/10 animate-in slide-in-from-left-2 relative">
+                        
+                        {/* Botón Eliminar (Posición absoluta para no estorbar) */}
+                        {variants.length > 1 && (
+                          <button type="button" onClick={() => removeVariant(i)} className="absolute top-3 right-3 p-1.5 bg-red-500/20 text-red-200 rounded-lg hover:bg-red-500/40 transition text-xs">✕</button>
+                        )}
+
+                        {/* 1. Selector de Red (Arriba) */}
+                        <div className="w-full">
+                            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Red Social</label>
+                            <select value={v.network} onChange={(e) => updateVariant(i, "network", e.target.value)} className="w-full p-3 bg-black/20 border border-white/10 text-slate-200 rounded-lg text-sm focus:bg-black/40 outline-none">
+                                <option>INSTAGRAM</option>
+                                <option>BLUESKY</option>
+                                <option>FACEBOOK</option>
+                                <option>TIKTOK</option>
+                            </select>
                         </div>
+
+                        {/* 2. Texto (Abajo) */}
+                        <div className="w-full">
+                            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Descripción / Copy</label>
+                            <textarea 
+                                value={v.text} 
+                                onChange={(e) => updateVariant(i, "text", e.target.value)} 
+                                placeholder={`Texto específico para ${v.network} (opcional)`} 
+                                rows={3} 
+                                className="w-full p-3 rounded-lg bg-black/20 border border-white/10 text-slate-200 placeholder-white/30 resize-none overflow-hidden text-sm focus:bg-black/40 outline-none transition" 
+                                style={{ minHeight: "80px" }} 
+                            />
+                        </div>
+
                       </div>
                     ))}
                 </div>
-              )}
-            </div>
 
-            {/* Redes */}
-            <div className="space-y-4">
-                <label className="block text-sm font-bold text-gray-200">🌍 Variantes por Red</label>
-                {variants.map((v, i) => (
-                  <div key={i} className="flex gap-3 items-start bg-black/20 p-4 rounded-xl border border-white/10 animate-in slide-in-from-left-2">
-                    <select
-                      value={v.network}
-                      onChange={(e) => updateVariant(i, "network", e.target.value)}
-                      className="p-3 bg-black/20 border border-white/10 text-white rounded-lg w-32"
-                    >
-                      <option>INSTAGRAM</option>
-                      <option>BLUESKY</option>
-                      <option>FACEBOOK</option>
-                    </select>
-                    <textarea
-                      value={v.text}
-                      onChange={(e) => updateVariant(i, "text", e.target.value)}
-                      placeholder={`Texto específico para ${v.network} (opcional)`}
-                      rows={2}
-                      className="flex-1 p-3 rounded-lg bg-black/20 border border-white/10 text-white placeholder-white/30 resize-none overflow-hidden"
-                      style={{ minHeight: "50px" }}
-                    />
-                    {variants.length > 1 && (
-                      <button type="button" onClick={() => removeVariant(i)} className="p-3 bg-red-500/20 text-red-200 rounded-lg hover:bg-red-500/40 transition">✕</button>
-                    )}
+                {availableNetworks.length > 0 && (
+                  <div className="flex gap-2">
+                     <select id="newNetwork" className="p-2 bg-white/10 border border-white/20 rounded-lg text-sm text-slate-200" defaultValue="">
+                        <option value="" disabled>Otra red...</option>
+                        {availableNetworks.map(r => <option key={r} value={r} className="bg-gray-900">{r}</option>)}
+                     </select>
+                     <button type="button" onClick={() => {
+                        const select = document.getElementById("newNetwork") as HTMLSelectElement;
+                        if(select.value) { setVariants([...variants, { network: select.value, text: "" }]); select.value = ""; }
+                     }} className="text-sm bg-green-600/20 text-green-300 px-3 py-2 rounded-lg hover:bg-green-600/30 transition border border-green-500/30">
+                        + Agregar
+                     </button>
                   </div>
-                ))}
-            </div>
+                )}
 
-            {availableNetworks.length > 0 && (
-              <div className="flex gap-2">
-                 <select id="newNetwork" className="p-2 bg-white/10 border border-white/20 rounded-lg text-sm text-black" defaultValue="">
-                    <option value="" disabled>Otra red...</option>
-                    {availableNetworks.map(r => <option key={r} value={r}>{r}</option>)}
-                 </select>
-                 <button type="button" onClick={() => {
-                    const select = document.getElementById("newNetwork") as HTMLSelectElement;
-                    if(select.value) { 
-                        setVariants([...variants, { network: select.value, text: "" }]); 
-                        select.value = ""; 
-                    }
-                 }} className="text-sm bg-green-500/20 text-green-300 px-3 py-2 rounded-lg hover:bg-green-500/30 transition">
-                    + Agregar
-                 </button>
-              </div>
-            )}
-
-            {/* Scheduler */}
-            <div className="pt-4 border-t border-white/10">
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white/5 transition w-fit">
-                <input type="checkbox" checked={agendar} onChange={() => setAgendar(!agendar)} className="w-5 h-5 accent-indigo-500" />
-                <span className="font-bold">📅 Programar publicación</span>
-              </label>
-              
-              {agendar && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-black/20 rounded-xl border border-white/5 animate-in slide-in-from-top-2">
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">Fecha</label>
-                    <input type="date" value={fecha} min={new Date().toISOString().split("T")[0]} onChange={(e) => setFecha(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded p-2 text-white [color-scheme:dark]" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">Hora</label>
-                    <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded p-2 text-white [color-scheme:dark]" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">Zona</label>
-                    <select value={zona} onChange={(e) => setZona(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded p-2 text-white text-sm">
-                      {TIMEZONES.map((tz) => <option key={tz.id} value={tz.id} className="text-black">{tz.label} ({getTimeInZone(tz.id)})</option>)}
-                    </select>
-                  </div>
+                {/* Scheduler */}
+                <div className="pt-4 border-t border-white/10">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-white/5 transition w-fit">
+                    <input type="checkbox" checked={agendar} onChange={() => setAgendar(!agendar)} className="w-5 h-5 accent-indigo-500" />
+                    <span className="font-bold text-sm">📅 Programar publicación</span>
+                  </label>
+                  
+                  {agendar && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-black/20 rounded-xl border border-white/5 animate-in slide-in-from-top-2">
+                      <div>
+                        <label className="text-xs text-gray-400 block mb-1">Fecha</label>
+                        <input type="date" value={fecha} min={new Date().toISOString().split("T")[0]} onChange={(e) => setFecha(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded p-2 text-slate-200 [color-scheme:dark] text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 block mb-1">Hora</label>
+                        <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded p-2 text-slate-200 [color-scheme:dark] text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 block mb-1">Zona</label>
+                        <select value={zona} onChange={(e) => setZona(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded p-2 text-slate-200 text-sm">
+                          {TIMEZONES.map((tz) => <option key={tz.id} value={tz.id} className="text-black">{tz.label} ({getTimeInZone(tz.id)})</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+
+                <button disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-4 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition disabled:opacity-50 transform active:scale-[0.99]">
+                  {loading ? "Procesando..." : agendar ? "📅 Agendar Publicación" : "📁 Guardar Publicación"}
+                </button>
+              </form>
             </div>
 
-            <button disabled={loading} className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 py-4 rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl transition disabled:opacity-50 transform active:scale-[0.99]">
-              {loading ? "Procesando..." : agendar ? "📅 Agendar Publicación" : "🚀 Publicar Ahora"}
-            </button>
-          </form>
+            {/* PANEL LATERAL DE RESTRICCIONES (ACTUALIZADO) */}
+            <div className="lg:w-64 shrink-0 space-y-4">
+                <div className="bg-white/5 border border-white/10 p-5 rounded-xl sticky top-6">
+                    <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
+                        📝 Reglas Activas
+                    </h3>
+                    <div className="space-y-3 text-sm">
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400">Máx Imágenes</span>
+                            <span className={`font-mono font-bold ${medias.filter(m => m.type === 'image').length > restrictions.maxImages ? "text-red-400" : "text-green-400"}`}>
+                                {restrictions.maxImages}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400">Máx Videos</span>
+                            <span className={`font-mono font-bold ${medias.filter(m => m.type === 'video').length > restrictions.maxVideos ? "text-red-400" : "text-green-400"}`}>
+                                {restrictions.maxVideos}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400">Mezclar Tipos</span>
+                            <span className={`font-bold ${!restrictions.allowMix && medias.some(m => m.type === 'video') && medias.some(m => m.type === 'image') ? "text-red-400" : "text-slate-200"}`}>
+                                {restrictions.allowMix ? "Sí" : "No"}
+                            </span>
+                        </div>
+                        <div className="border-t border-white/10 pt-2 mt-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Mínimo Archivos</span>
+                                <span className={`font-mono font-bold ${medias.length < restrictions.minMedia ? "text-orange-400" : "text-green-400"}`}>
+                                    {restrictions.minMedia}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Alertas dinámicas */}
+                    {variants.some(v => v.network === "TIKTOK") && (
+                        <div className="mt-4 p-3 bg-pink-500/10 border border-pink-500/20 rounded-lg text-xs text-pink-200">
+                            🎵 TikTok activo: Solo se permiten videos.
+                        </div>
+                    )}
+                </div>
+            </div>
+
         </div>
       </div>
-    </div>
   );
 }

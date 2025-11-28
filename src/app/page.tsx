@@ -15,7 +15,7 @@ export default function HomePage() {
   const { data: session } = useSession();
 
   return (
-    <main className="min-h-screen w-full bg-gradient-to-b from-indigo-700 via-fuchsia-600 to-rose-500 text-white">
+    <main className="min-h-screen w-full bg-gradient-to-b from-slate-950 via-purple-950 to-slate-900 text-slate-200">
 
       {/* Top Nav */}
       <header className="sticky top-0 z-50 mx-auto flex max-w-7xl items-center justify-between px-6 py-4 backdrop-blur-md bg-black/10 rounded-b-2xl border-b border-white/10">
@@ -30,20 +30,20 @@ export default function HomePage() {
           <span className="text-lg font-semibold tracking-wide">UniPost</span>
         </div>
         <nav className="hidden items-center gap-6 text-sm md:flex">
-          <a href="#feed" className="opacity-90 transition hover:opacity-100 hover:text-white">Feed</a>
-          <a href="#features" className="opacity-90 transition hover:opacity-100 hover:text-white">Características</a>
-          <a href="#about" className="opacity-90 transition hover:opacity-100 hover:text-white">Sobre Nosotros</a>
+          <a href="#feed" className="opacity-90 transition hover:opacity-100 hover:text-slate-200">Feed</a>
+          <a href="#features" className="opacity-90 transition hover:opacity-100 hover:text-slate-200">Características</a>
+          <a href="#about" className="opacity-90 transition hover:opacity-100 hover:text-slate-200">Sobre Nosotros</a>
 
           <div className="flex items-center gap-3 ml-4">
             {!session ? (
               <>
-                <a href="/login" className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-white backdrop-blur-sm hover:bg-white/10 transition">Iniciar sesión</a>
+                <a href="/login" className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-slate-200 backdrop-blur-sm hover:bg-white/10 transition">Iniciar sesión</a>
                 <a href="/register" className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg transition">Registrarse</a>
               </>
             ) : (
               <>
                 <a href="/composer" className="rounded-xl bg-white px-4 py-2 font-semibold text-slate-900 shadow hover:shadow-lg transition">Ir a la App</a>
-                <button onClick={() => signOut({ callbackUrl: "/" })} className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-white backdrop-blur-sm hover:bg-white/10 transition">Cerrar sesión</button>
+                <button onClick={() => signOut({ callbackUrl: "/" })} className="rounded-xl border border-white/30 px-4 py-2 font-semibold text-slate-200 backdrop-blur-sm hover:bg-white/10 transition">Cerrar sesión</button>
               </>
             )}
           </div>
@@ -101,7 +101,7 @@ export default function HomePage() {
               {/* Centro - Ícono "+" */}
               <div className="col-start-2 row-start-2 flex items-center justify-center z-30">
                 <div className="bg-white/20 p-6 rounded-full backdrop-blur-md shadow-[0_0_30px_rgba(255,255,255,0.3)] border-2 border-white/40 animate-pulse hover:animate-none transition hover:scale-110">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={5} stroke="currentColor" className="w-12 h-12 lg:w-16 lg:h-16 text-white drop-shadow-xl">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={5} stroke="currentColor" className="w-12 h-12 lg:w-16 lg:h-16 text-slate-200 drop-shadow-xl">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                 </div>
@@ -166,19 +166,19 @@ export default function HomePage() {
               <p>
                 UniPost nació de un proyecto de título para la carrera de Ingeniería Informática en DuocUC, Chile.
                 El concepto nació de la necesidad percibida por uno de los diseñadores que ejerce como ilustrador independiente,
-                <span className="block mt-2 text-2xl font-extrabold text-white/100 bg-white/10 px-4 py-2 rounded-xl -rotate-1"> ¿La necesidad? Alcance y exposición en redes sociales.</span>
+                <span className="block mt-2 text-2xl font-extrabold text-slate-200/100 bg-white/10 px-4 py-2 rounded-xl -rotate-1"> ¿La necesidad? Alcance y exposición en redes sociales.</span>
               </p>
               <p>
                 Muchos rubros de la actualidad trabajan codo a codo con redes sociales, pero el consumo de tiempo que conlleva
                 es la razón por la que los Community Managers existen. Esta plataforma busca ser una herramienta para todos,
                 tanto emprendedores e independientes como empresas y Community Managers de compañías más grandes.
               </p>
-              <p className="text-xl font-bold text-white pt-6 border-t-2 border-white/10">
+              <p className="text-xl font-bold text-slate-200 pt-6 border-t-2 border-white/10">
                 Esperamos que esta herramienta cumpla con tus necesidades y a su vez, aliviane tu carga.
               </p>
             </div>
 
-            <div className="mt-12 text-base font-bold tracking-[0.2em] uppercase text-white/60 bg-white/5 px-6 py-3 rounded-full border border-white/10">
+            <div className="mt-12 text-base font-bold tracking-[0.2em] uppercase text-slate-200/60 bg-white/5 px-6 py-3 rounded-full border border-white/10">
               - Equipo UniPost, 2025
             </div>
           </div>
@@ -193,9 +193,9 @@ export default function HomePage() {
             <p className="text-sm">© 2025 UniPost. Desarrollado en Chile.</p>
           </div>
           <nav className="flex items-center gap-8 text-sm font-bold tracking-wide opacity-80">
-            <a href="#feed" className="hover:text-white hover:underline transition underline-offset-4">Feed</a>
-            <a href="#features" className="hover:text-white hover:underline transition underline-offset-4">Características</a>
-            <a href="#about" className="hover:text-white hover:underline transition underline-offset-4">Sobre Nosotros</a>
+            <a href="#feed" className="hover:text-slate-200 hover:underline transition underline-offset-4">Feed</a>
+            <a href="#features" className="hover:text-slate-200 hover:underline transition underline-offset-4">Características</a>
+            <a href="#about" className="hover:text-slate-200 hover:underline transition underline-offset-4">Sobre Nosotros</a>
           </nav>
         </div>
       </footer>

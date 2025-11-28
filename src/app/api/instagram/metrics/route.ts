@@ -60,7 +60,6 @@ export async function GET() {
     }
 
     const dataList = mediaData.data || [];
-    console.log(`✅ IG Feed devolvió ${dataList.length} publicaciones reales.`);
 
     // 4. Formatear
     const posts = dataList.map((p: any) => ({

@@ -84,7 +84,7 @@ function FeedCard({ variant }: { variant: FeedVariant }) {
           {variant.network}
         </span>
         {variant.post?.category && (
-           <span className="text-[10px] text-white/50 uppercase tracking-wider border border-white/10 px-2 py-0.5 rounded">
+           <span className="text-[10px] text-slate-200/50 uppercase tracking-wider border border-white/10 px-2 py-0.5 rounded">
              {variant.post.category}
            </span>
         )}
@@ -171,7 +171,7 @@ export function PublicFeed() {
 
   return (
     <section className="mx-auto max-w-7xl px-4 md:px-6 pb-20" id="feed">
-      <h2 className="mb-2 text-center text-3xl font-extrabold sm:text-4xl text-white">
+      <h2 className="mb-2 text-center text-3xl font-extrabold sm:text-4xl text-slate-200">
         Lo que se está creando con UniPost
       </h2>
       <p className="mx-auto mb-8 max-w-2xl text-center text-sm opacity-70">
@@ -187,7 +187,7 @@ export function PublicFeed() {
             <select 
                 value={selectedNetwork}
                 onChange={(e) => setSelectedNetwork(e.target.value)}
-                className="w-full bg-white/5 border border-white/20 rounded-lg p-2 text-white text-sm focus:bg-black/80 outline-none transition"
+                className="w-full bg-white/5 border border-white/20 rounded-lg p-2 text-slate-200 text-sm focus:bg-black/80 outline-none transition"
             >
                 {NETWORKS.map(net => (
                     <option key={net.value} value={net.value} className="bg-gray-900">{net.label}</option>
@@ -204,8 +204,8 @@ export function PublicFeed() {
                     onClick={() => setSelectedCategory(cat)}
                     className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 border ${
                     selectedCategory === cat
-                        ? "bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20"
-                        : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white"
+                        ? "bg-indigo-600 border-indigo-500 text-slate-200 shadow-lg shadow-indigo-500/20"
+                        : "bg-white/5 border-white/10 text-slate-200/70 hover:bg-white/10 hover:text-slate-200"
                     }`}
                 >
                     {cat}
@@ -256,7 +256,7 @@ export function PublicFeed() {
                 ◀ Anterior
             </button>
             
-            <span className="text-sm font-mono text-white/60">
+            <span className="text-sm font-mono text-slate-200/60">
                 Página {currentPage} de {totalPages}
             </span>
 

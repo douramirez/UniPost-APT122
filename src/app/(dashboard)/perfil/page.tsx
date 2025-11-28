@@ -118,7 +118,6 @@ export default function PerfilPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-800 via-purple-700 to-fuchsia-800 text-white p-10">
       <div className="max-w-6xl mx-auto text-center">
         {session ? (
           <>
@@ -136,7 +135,7 @@ export default function PerfilPage() {
             </h1>
             
             {/* 🏢 NOMBRE DE ORGANIZACIÓN DINÁMICO */}
-            <p className="text-white/70 mb-6 text-lg font-medium bg-white/10 inline-block px-4 py-1 rounded-full">
+            <p className="text-slate-200/70 mb-6 text-lg font-medium bg-white/10 inline-block px-4 py-1 rounded-full">
               {orgName}
             </p>
 
@@ -149,8 +148,8 @@ export default function PerfilPage() {
 
             {/* --- NAVEGACIÓN --- */}
             <div className="flex justify-center gap-2 mb-8 border-b border-white/10 pb-1">
-              <button onClick={() => setActiveTab("cuentas")} className={`px-6 py-2 rounded-t-lg font-bold transition-all ${activeTab === "cuentas" ? "bg-white/20 text-white border-b-2 border-white" : "text-white/50 hover:bg-white/5 hover:text-white"}`}>🔗 Cuentas Conectadas</button>
-              <button onClick={() => setActiveTab("perfil")} className={`px-6 py-2 rounded-t-lg font-bold transition-all ${activeTab === "perfil" ? "bg-white/20 text-white border-b-2 border-white" : "text-white/50 hover:bg-white/5 hover:text-white"}`}>👤 Datos de Perfil</button>
+              <button onClick={() => setActiveTab("cuentas")} className={`px-6 py-2 rounded-t-lg font-bold transition-all ${activeTab === "cuentas" ? "bg-white/20 text-slate-200 border-b-2 border-white" : "text-slate-200/50 hover:bg-white/5 hover:text-slate-200"}`}>🔗 Cuentas Conectadas</button>
+              <button onClick={() => setActiveTab("perfil")} className={`px-6 py-2 rounded-t-lg font-bold transition-all ${activeTab === "perfil" ? "bg-white/20 text-slate-200 border-b-2 border-white" : "text-slate-200/50 hover:bg-white/5 hover:text-slate-200"}`}>👤 Datos de Perfil</button>
             </div>
 
             {/* --- CONTENIDO --- */}
@@ -176,17 +175,17 @@ export default function PerfilPage() {
                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs font-bold">CAMBIAR</div>
                       </div>
                       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageChange} />
-                      <p className="text-xs text-white/50 mt-2">Click en la imagen para cambiarla</p>
+                      <p className="text-xs text-slate-200/50 mt-2">Click en la imagen para cambiarla</p>
                     </div>
 
                     <div>
                       <label className="block text-sm text-gray-300 mb-2">Nombre de Usuario</label>
-                      <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full p-3 rounded bg-black/20 border border-white/10 text-white focus:outline-none focus:border-white/50" />
+                      <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full p-3 rounded bg-black/20 border border-white/10 text-slate-200 focus:outline-none focus:border-white/50" />
                     </div>
                     
                     <div>
                       <label className="block text-sm text-gray-300 mb-2">Correo Electrónico</label>
-                      <input type="email" defaultValue={session.user?.email || ""} disabled className="w-full p-3 rounded bg-black/40 border border-white/5 text-white/50 cursor-not-allowed" />
+                      <input type="email" defaultValue={session.user?.email || ""} disabled className="w-full p-3 rounded bg-black/40 border border-white/5 text-slate-200/50 cursor-not-allowed" />
                     </div>
 
                     <div className="flex justify-end pt-4">
@@ -200,9 +199,8 @@ export default function PerfilPage() {
             )}
           </>
         ) : (
-          <p className="text-white/80">Inicia sesión para ver tu perfil.</p>
+          <p className="text-slate-200/80">Inicia sesión para ver tu perfil.</p>
         )}
       </div>
-    </div>
   );
 }
