@@ -1,64 +1,65 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import Image from "next/image";
 import UniPostLogo from "../assets/UniPost.png";
 
-export default function VerificarCorreo() {
+function VerificarCorreoContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const emailFromURL = searchParams.get("email");
 
-  // Si el email no existe, redirigir al login
-  if (!emailFromURL) {
-    router.push("/login");
-  }
-
   const [email, setEmail] = useState(emailFromURL || "");
   const [code, setCode] = useState("");
-  const [sent, setSent] = useState(false);  // Estado para saber si ya enviamos el código
+  const [sent, setSent] = useState(false); // Estado para saber si ya enviamos el código
   const [loadingSend, setLoadingSend] = useState(false);
   const [loadingVerify, setLoadingVerify] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);  // Verificar si está verificado
+  const [isVerified, setIsVerified] = useState(false); // Verificar si está verificado
 
   useEffect(() => {
-    if (emailFromURL) setEmail(emailFromURL);
+    // si no viene email, redirige desde el efecto (no en el render)
+    if (!emailFromURL) {
+      router.push("/login");
+      return;
+    }
 
-    // Verificar si el correo ya está verificado
+    setEmail(emailFromURL);
+
     const checkVerification = async () => {
       const res = await fetch("/api/auth/check-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: emailFromURL }),
       });
 
       const json = await res.json();
       if (json.ok && json.isVerified) {
-        // Si está verificado, redirigir al login
         setIsVerified(true);
         router.push("/login");
       }
     };
 
-    if (emailFromURL) {
-      checkVerification();
-    }
+    checkVerification();
   }, [emailFromURL, router]);
+
+  if (!emailFromURL || isVerified) return null;
 
   async function sendCode() {
     if (sent) {
-      toast.success("📩 Código Reenviado. Revisa tu bandeja de entrada.");
+      toast.success("📩 Código reenviado. Revisa tu bandeja de entrada.");
       setLoadingSend(true);
 
-      const res = await fetch("/api/auth/send-code", {
+      await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
+
+      setLoadingSend(false);
       return;
     }
 
@@ -73,7 +74,7 @@ export default function VerificarCorreo() {
     const json = await res.json();
     if (json.ok) {
       toast.success("📩 Código enviado. Revisa tu bandeja de entrada.");
-      setSent(true); // Actualiza el estado para que el código haya sido enviado
+      setSent(true);
     } else {
       toast.error("No se pudo enviar el código.");
     }
@@ -105,13 +106,9 @@ export default function VerificarCorreo() {
     setLoadingVerify(false);
   }
 
-  if (isVerified) return null;
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900">
-
-        <div className="max-w-md w-full bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl text-slate-200">
-      
+      <div className="max-w-md w-full bg-white/10 backdrop-blur-lg p-8 rounded-2xl shadow-xl text-slate-200">
         {/* 📛 Logo + UniPost */}
         <div className="flex flex-col items-center justify-center mb-6">
           <div className="bg-white/20 p-3 rounded-2xl shadow-inner mb-3">
@@ -126,60 +123,73 @@ export default function VerificarCorreo() {
           <h1 className="text-2xl font-black tracking-wide">UniPost</h1>
         </div>
 
-          <h1 className="text-3xl font-bold mb-6 text-center">Verificar correo</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">Verificar correo</h1>
 
-          <input
-            type="email"
-            value={email}
-            disabled
-            className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 text-slate-200"
-          />
+        <input
+          type="email"
+          value={email}
+          disabled
+          className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 text-slate-200"
+        />
 
-          {!sent && (
-            // El botón para enviar el código solo aparece si no se ha enviado
+        {!sent && (
+          <button
+            onClick={sendCode}
+            disabled={loadingSend}
+            className="w-full bg-green-500 hover:bg-green-600 py-3 rounded font-semibold mb-4"
+          >
+            {loadingSend ? "Enviando..." : "Enviar código"}
+          </button>
+        )}
+
+        {sent && (
+          <>
+            <input
+              type="text"
+              maxLength={6}
+              placeholder="Código de 6 dígitos"
+              onChange={(e) => setCode(e.target.value)}
+              className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 text-slate-200 text-center text-xl tracking-widest"
+            />
+
             <button
-              onClick={sendCode}
-              disabled={loadingSend}
-              className="w-full bg-green-500 hover:bg-green-600 py-3 rounded font-semibold mb-4"
+              onClick={verifyCode}
+              disabled={loadingVerify}
+              className="w-full bg-blue-500 hover:bg-blue-600 py-3 rounded font-semibold"
             >
-              {loadingSend ? "Enviando..." : "Enviar código"}
+              {loadingVerify ? "Verificando..." : "Verificar correo"}
             </button>
-          )}
 
-          {sent && (
-            <>
-              <input
-                type="text"
-                maxLength={6}
-                placeholder="Código de 6 dígitos"
-                onChange={(e) => setCode(e.target.value)}
-                className="w-full p-3 mb-4 rounded bg-white/10 border border-white/20 text-slate-200 text-center text-xl tracking-widest"
-              />
-
+            <div className="mt-4 text-center">
               <button
-                onClick={verifyCode}
-                disabled={loadingVerify}
-                className="w-full bg-blue-500 hover:bg-blue-600 py-3 rounded font-semibold"
+                onClick={sendCode}
+                className="text-sm text-blue-500 underline hover:text-blue-700"
               >
-                {loadingVerify ? "Verificando..." : "Verificar correo"}
+                Reenviar código
               </button>
+            </div>
+          </>
+        )}
 
-              {/* Botón para reenviar código si ya ha sido enviado */}
-              <div className="mt-4 text-center">
-                <button
-                  onClick={sendCode}
-                  className="text-sm text-blue-500 underline hover:text-blue-700"
-                >
-                  Reenviar código
-                </button>
-              </div>
-            </>
-          )}
-
-          <p className="text-center mt-6 text-slate-200/70 text-sm">
-            Si no encuentras el correo, revisa tu carpeta de spam.
-          </p>
-        </div>
+        <p className="text-center mt-6 text-slate-200/70 text-sm">
+          Si no encuentras el correo, revisa tu carpeta de spam.
+        </p>
+      </div>
     </div>
+  );
+}
+
+// 👉 Wrapper con Suspense (lo que Next te exige)
+export default function VerificarCorreo() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-slate-200">
+          Cargando verificación...
+        </div>
+      }
+    >
+      <VerificarCorreoContent />
+    </Suspense>
   );
 }
