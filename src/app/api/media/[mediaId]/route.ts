@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { mediaId: string } }
+  { params }: any
 ) {
+  const { mediaId } = await params.mediaId;
   try {
     const id = Number(params.mediaId);
     if (!Number.isFinite(id)) {
