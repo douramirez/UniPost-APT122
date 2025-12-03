@@ -30,7 +30,7 @@ export async function POST(req: Request) {
         comments,
         shares,
         impressions,
-      },
+      }as any,
     });
 
     return NextResponse.json({ ok: true, data: metric });

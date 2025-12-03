@@ -5,7 +5,10 @@ import { prisma } from '@/lib/prisma';
 type Params = { params: { id: string } };
 
 // ✅ Simula publicación de una variante
-export async function POST(_req: Request, { params }: Params) {
+export async function POST(
+  _req: Request, { params }: any
+) {
+  
   try {
     // Generar ID simulado de publicación externa
     const externalId = `mock-${Date.now()}`;

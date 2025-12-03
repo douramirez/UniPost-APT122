@@ -24,6 +24,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!user) return null;
 
+        // 👇 Asegurarse de que el usuario tiene password
+        if (!user.password) {
+          return null; // o puedes lanzar un error si prefieres
+        } 
+
         const valid = await bcrypt.compare(credentials.password, user.password);
         if (!valid) return null;
 
@@ -32,15 +37,16 @@ export const authOptions: NextAuthOptions = {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
 
-        // ✅ CAMBIO 1: Retornar explícitamente los datos, incluyendo la imagen
+        // ✅ Adaptar el usuario de Prisma al tipo de NextAuth (id string)
         return {
-          id: user.id,
-          name: user.name,
+          id: user.id.toString(),        // 👈 convertir number → string
+          name: user.name ?? undefined,
           email: user.email,
           emailVerified: user.emailVerified,
-          image: user.image, // 👈 Importante: Pasar la imagen de la BD al flujo
-        };
+          image: user.image ?? undefined,
+        } as any; // 👈 opcional, para que TS no moleste más
       },
+
     }),
   ],
   session: { strategy: "jwt" },
@@ -50,19 +56,21 @@ export const authOptions: NextAuthOptions = {
   // Callbacks para manejar el JWT y la sesión
   callbacks: {
     async signIn({ user }) {
-      if (!user?.emailVerified) {
+      const adapterUser = user as any; // o as AdapterUser si lo importas
+
+      if (!adapterUser?.emailVerified) {
         throw new Error("EMAIL_NOT_VERIFIED");
-      }
-      return true;
-    },
+    }
+  return true;
+},
 
     // ✅ CAMBIO 2: Guardar la imagen en el token y soportar actualizaciones
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id = user.id;
-        token.emailVerified = user.emailVerified;
-        token.picture = user.image; // 👈 Guardamos la imagen en el token
-        token.name = user.name;
+        const u = user as any;
+        (token as any).emailVerified = u.emailVerified; 
+        (token as any).picture = u.image;
+        token.name = u.name;
       }
 
       // Si se dispara "update" desde el cliente (perfil), actualizamos el token
@@ -77,11 +85,11 @@ export const authOptions: NextAuthOptions = {
     // ✅ CAMBIO 3: Pasar la imagen del token a la sesión final
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as number;
-        session.user.emailVerified = token.emailVerified;
-        session.user.image = token.picture;
+        (session.user as any).id = token.id;
+        (session.user as any).emailVerified = (token as any).emailVerified;
+        session.user.image = (token as any).picture;
         session.user.name = token.name;
-      }
+  }
       return session;
     },
   },
