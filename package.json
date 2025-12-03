@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@mermaid-js/mermaid-cli": "^11.12.0",
     "@tailwindcss/postcss": "^4",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
@@ -36,6 +37,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.2",
     "prisma": "^6.19.0",
+    "prisma-erd-generator": "^2.3.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
