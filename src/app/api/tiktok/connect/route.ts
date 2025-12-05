@@ -11,7 +11,8 @@ function base64url(buffer: ArrayBuffer) {
 }
 
 async function generatePKCE() {
-  const code_verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+const randomValues = crypto.getRandomValues(new Uint8Array(32));
+const code_verifier = base64url(randomValues.buffer);
 
   const encoder = new TextEncoder();
   const data = encoder.encode(code_verifier);

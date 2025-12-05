@@ -163,6 +163,7 @@ model Media {
   height         Int?
   duration       Int?
   size           Int?
+   mediaLocation String
   createdAt      DateTime  @default(now())
   mediaOrder     Int       @default(1)
   post           Post      @relation(fields: [postId], references: [id])

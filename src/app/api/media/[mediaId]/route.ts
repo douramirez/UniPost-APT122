@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { mediaId: string } }
+  context: { params: Promise<{ mediaId: string }> }
 ) {
-  const id = Number(params.mediaId);
+  const { mediaId } = await context.params;
+  const id = Number(mediaId);
 
   if (!Number.isFinite(id)) {
     return new NextResponse("Invalid media id", { status: 400 });
@@ -20,6 +21,5 @@ export async function GET(
     return new NextResponse("Media not found", { status: 404 });
   }
 
-  // 🔥 Redirige al archivo en Supabase Storage
   return NextResponse.redirect(media.url, 302);
 }

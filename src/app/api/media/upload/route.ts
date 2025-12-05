@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
         url: publicUrl,
         mime: file.type,
         type: "IMAGE",
+        mediaLocation: "SUPABASE",
       },
     });
 

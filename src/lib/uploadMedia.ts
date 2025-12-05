@@ -21,7 +21,8 @@ export async function uploadMediaAndSave(file: Buffer, mime: string, postId: num
       postId,
       url,
       mime,
-      type: "IMAGE"
+      type: "IMAGE",
+      mediaLocation: "SUPABASE",
     } ,
   });
 
