@@ -189,7 +189,6 @@ export async function POST(req: Request) {
             mime,
             type: mediaType,
             size: buffer.length,
-            originalBase64: null,
             url: absoluteUrl ?? relativeUrl,
             mediaLocation: relativeUrl,
             mediaOrder: typeof m.order === "number" ? m.order + 1 : index + 1,
