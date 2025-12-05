@@ -28,7 +28,7 @@ export async function GET() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
-    const baseUrl = process.env.NEXTAUTH_URL || "https://www.unipost.click/";
+    const baseUrl = process.env.NEXTAUTH_URL || "https://unipost.click/api/tiktok/callback";
     return NextResponse.redirect(new URL("/login", baseUrl));
   }
 

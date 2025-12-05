@@ -93,12 +93,21 @@ export default function PublicacionesPage() {
       if (variant.network === "BLUESKY") endpoint = "/api/publish/bluesky";
       else if (variant.network === "INSTAGRAM") endpoint = "/api/publish/instagram";
       else if (variant.network === "FACEBOOK") endpoint = "/api/publish/facebook";
+      else if (variant.network === "TIKTOK") endpoint = "/api/publish/tiktok";
       else throw new Error("Red no soportada");
+
+      // ⭐ EXTRAER VIDEO
+      const video = post.medias.find(m => m.type === "VIDEO" || m.mime.startsWith("video"));
+      if (!video) throw new Error("Esta variante no tiene video para TikTok");
 
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: post.id, variantId: variant.id }),
+        body: JSON.stringify({
+          userId: session?.user?.id,     
+          caption: variant.text,        
+          videoUrl: video.url,           
+      }),
       });
 
       const data = await res.json();

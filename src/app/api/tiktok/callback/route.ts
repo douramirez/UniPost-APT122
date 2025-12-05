@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL ||
-    "https://www.unipost.click/";
+    "https://unipost.click/api/tiktok/callback";
 
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

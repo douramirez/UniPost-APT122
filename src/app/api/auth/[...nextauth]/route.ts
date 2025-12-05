@@ -8,6 +8,7 @@ import bcrypt from "bcrypt";
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
+
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -15,6 +16,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Correo", type: "email" },
         password: { label: "Contraseña", type: "password" },
       },
+
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
@@ -24,56 +26,53 @@ export const authOptions: NextAuthOptions = {
 
         if (!user) return null;
 
-        // 👇 Asegurarse de que el usuario tiene password
-        if (!user.password) {
-          return null; // o puedes lanzar un error si prefieres
-        } 
+        if (!user.password) return null;
 
         const valid = await bcrypt.compare(credentials.password, user.password);
         if (!valid) return null;
 
-        // ⛔ Bloquear si NO está verificado
         if (!user.emailVerified) {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
 
-        // ✅ Adaptar el usuario de Prisma al tipo de NextAuth (id string)
+        // 👇 DEVOLVER ID COMO STRING PARA NEXTAUTH
         return {
-          id: user.id.toString(),        // 👈 convertir number → string
+          id: user.id.toString(),
           name: user.name ?? undefined,
           email: user.email,
           emailVerified: user.emailVerified,
           image: user.image ?? undefined,
-        } as any; // 👈 opcional, para que TS no moleste más
+        } as any;
       },
-
     }),
   ],
+
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
   pages: { signIn: "/login" },
 
-  // Callbacks para manejar el JWT y la sesión
   callbacks: {
+    // 🔒 Verificación del login
     async signIn({ user }) {
-      const adapterUser = user as any; // o as AdapterUser si lo importas
-
+      const adapterUser = user as any;
       if (!adapterUser?.emailVerified) {
         throw new Error("EMAIL_NOT_VERIFIED");
-    }
-  return true;
-},
+      }
+      return true;
+    },
 
-    // ✅ CAMBIO 2: Guardar la imagen en el token y soportar actualizaciones
+    // 🟣 JWT CALLBACK — AQUÍ SE GUARDA EL ID
     async jwt({ token, user, trigger, session }) {
       if (user) {
         const u = user as any;
-        (token as any).emailVerified = u.emailVerified; 
+
+        token.id = u.id; // ⭐ NECESARIO PARA session.user.id
+        (token as any).emailVerified = u.emailVerified;
         (token as any).picture = u.image;
         token.name = u.name;
       }
 
-      // Si se dispara "update" desde el cliente (perfil), actualizamos el token
+      // Permitir updates desde el perfil
       if (trigger === "update" && session) {
         token.name = session.user.name;
         token.picture = session.user.image;
@@ -82,14 +81,14 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
 
-    // ✅ CAMBIO 3: Pasar la imagen del token a la sesión final
+    // 🟣 SESSION CALLBACK — PASA EL ID AL CLIENTE
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id;
+        (session.user as any).id = token.id; // ⭐ YA DISPONIBLE EN EL CLIENTE
         (session.user as any).emailVerified = (token as any).emailVerified;
         session.user.image = (token as any).picture;
         session.user.name = token.name;
-  }
+      }
       return session;
     },
   },

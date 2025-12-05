@@ -25,6 +25,7 @@ model User {
   BlueSky_Access   BlueSky_Access[]
   facebookAccesses Facebook_Access[]
   Instagram_Access Instagram_Access[]
+  postPublished    PostPublished[]
   memberships      Membership[]
   posts            Post[]             @relation("UserPosts")
   tikTokAccesses   TikTok_Access[]
@@ -69,6 +70,18 @@ model Post {
   organization   Organization @relation(fields: [organizationId], references: [id])
   schedule       Schedule?
   variants       Variant[]
+}
+
+model PostPublished {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  network    String
+  externalId String
+  url        String
+  caption    String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 model Schedule {
@@ -154,19 +167,19 @@ model Role {
 }
 
 model Media {
-  id             Int       @id @default(autoincrement())
-  postId         Int
-  url            String
-  type           MediaType
-  mime           String
-  width          Int?
-  height         Int?
-  duration       Int?
-  size           Int?
-   mediaLocation String
-  createdAt      DateTime  @default(now())
-  mediaOrder     Int       @default(1)
-  post           Post      @relation(fields: [postId], references: [id])
+  id            Int       @id @default(autoincrement())
+  postId        Int
+  url           String
+  type          MediaType
+  mime          String
+  width         Int?
+  height        Int?
+  duration      Int?
+  size          Int?
+  mediaLocation String
+  createdAt     DateTime  @default(now())
+  mediaOrder    Int       @default(1)
+  post          Post      @relation(fields: [postId], references: [id])
 }
 
 model Facebook_Access {
