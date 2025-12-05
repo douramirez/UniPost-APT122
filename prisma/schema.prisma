@@ -20,16 +20,16 @@ model User {
   emailVerified    DateTime?
   password         String?
   roleID           BigInt?
-  organizationId   Int?
   image            String             @default("/uploads/ProfilePics/default.png")
+  organizationId   Int?
   BlueSky_Access   BlueSky_Access[]
   facebookAccesses Facebook_Access[]
   Instagram_Access Instagram_Access[]
   memberships      Membership[]
   posts            Post[]             @relation("UserPosts")
+  tikTokAccesses   TikTok_Access[]
   Organization     Organization?      @relation(fields: [organizationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   Role             Role?              @relation(fields: [roleID], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tikTokAccesses   TikTok_Access[]
 }
 
 model Organization {
@@ -164,8 +164,6 @@ model Media {
   duration       Int?
   size           Int?
   createdAt      DateTime  @default(now())
-  originalBase64 String?
-  mediaLocation  String
   mediaOrder     Int       @default(1)
   post           Post      @relation(fields: [postId], references: [id])
 }
@@ -190,9 +188,8 @@ model TikTok_Access {
   expiresIn    Int?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-
-  User      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  RedSocial RedSocial @relation(fields: [redSocial], references: [id])
+  RedSocial    RedSocial @relation(fields: [redSocial], references: [id])
+  User         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, redSocial])
 }

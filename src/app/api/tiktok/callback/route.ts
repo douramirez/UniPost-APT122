@@ -6,9 +6,11 @@ import { encrypt } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  
-  // Definimos la URL base segura (prioridad a la variable pública, luego auth, luego hardcode)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || "https://app.unipost.cl";
+
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXTAUTH_URL ||
+    "https://www.unipost.click/";
 
   if (!session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -18,7 +20,6 @@ export async function GET(req: NextRequest) {
   const code = searchParams.get("code");
   const error = searchParams.get("error");
 
-  // Redirección de error usando baseUrl
   if (error) {
     console.error("TikTok Auth Error:", error);
     return NextResponse.redirect(new URL("/perfil?error=tiktok_denied", baseUrl));
@@ -29,13 +30,32 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    // -------------------------
+    // 1️⃣ OBTENER CODE VERIFIER
+    // -------------------------
+    const codeVerifier = req.cookies.get("tiktok_code_verifier")?.value;
+
+    if (!codeVerifier) {
+      console.error("Falta code_verifier en cookies");
+      return NextResponse.redirect(
+        new URL("/perfil?error=missing_code_verifier", baseUrl)
+      );
+    }
+
+    // -------------------------
+    // 2️⃣ SOLICITAR TOKEN
+    // -------------------------
     const tokenEndpoint = "https://open.tiktokapis.com/v2/oauth/token/";
     const params = new URLSearchParams();
+
     params.append("client_key", process.env.TIKTOK_CLIENT_KEY!);
     params.append("client_secret", process.env.TIKTOK_CLIENT_SECRET!);
     params.append("code", code);
     params.append("grant_type", "authorization_code");
     params.append("redirect_uri", process.env.TIKTOK_REDIRECT_URI!);
+
+    // 🔥🔥🔥 Lo que te faltaba 🔥🔥🔥
+    params.append("code_verifier", codeVerifier);
 
     const tokenRes = await fetch(tokenEndpoint, {
       method: "POST",
@@ -47,15 +67,36 @@ export async function GET(req: NextRequest) {
     });
 
     const tokenData = await tokenRes.json();
+    console.log("TikTok token response:", tokenData);
 
     if (tokenData.error) {
-      throw new Error(`TikTok Token Error: ${tokenData.error_description || JSON.stringify(tokenData)}`);
+      throw new Error(
+        `TikTok Token Error: ${
+          tokenData.error_description || JSON.stringify(tokenData)
+        }`
+      );
     }
 
-    const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    // -------------------------
+    // 3️⃣ LIMPIAR COOKIE PKCE
+    // -------------------------
+    const response = NextResponse.redirect(
+      new URL("/perfil?tiktok=linked", baseUrl)
+    );
+
+    response.cookies.set("tiktok_code_verifier", "", {
+      path: "/",
+      maxAge: 0,
+    });
+
+    // -------------------------
+    // 4️⃣ GUARDAR TOKENS EN BD
+    // -------------------------
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
     if (!user) throw new Error("Usuario local no encontrado");
 
-    // Guardar datos (usando el ID 4 para TikTok)
     const TIKTOK_SOCIAL_ID = 4;
 
     const existing = await prisma.tikTok_Access.findFirst({
@@ -67,21 +108,24 @@ export async function GET(req: NextRequest) {
       redSocial: TIKTOK_SOCIAL_ID,
       openId: tokenData.open_id,
       accessToken: encrypt(tokenData.access_token),
-      refreshToken: encrypt(tokenData.refresh_token), 
+      refreshToken: encrypt(tokenData.refresh_token),
       expiresIn: tokenData.expires_in,
     };
 
     if (existing) {
-      await prisma.tikTok_Access.update({ where: { id: existing.id }, data: dataToSave });
+      await prisma.tikTok_Access.update({
+        where: { id: existing.id },
+        data: dataToSave,
+      });
     } else {
       await prisma.tikTok_Access.create({ data: dataToSave });
     }
 
-    // ✅ CORRECCIÓN FINAL: Redirigir usando la URL base explícita
-    return NextResponse.redirect(new URL("/perfil?tiktok=linked", baseUrl));
-
+    return response;
   } catch (error) {
     console.error("❌ Error en callback de TikTok:", error);
-    return NextResponse.redirect(new URL("/perfil?error=tiktok_failed", baseUrl));
+    return NextResponse.redirect(
+      new URL("/perfil?error=tiktok_failed", baseUrl)
+    );
   }
 }

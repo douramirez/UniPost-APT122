@@ -21,7 +21,6 @@ type Media = {
   url: string;
   type: "IMAGE" | "VIDEO";
   mime: string;
-  mediaLocation: string;
 };
 
 type Schedule = {
@@ -238,9 +237,9 @@ export default function PublicacionesPage() {
                 {currentMedia && (
                   <div className="mt-3 rounded-xl overflow-hidden border border-white/20 bg-black/40 p-2 flex flex-col items-center">
                     {currentMedia.type === "VIDEO" || currentMedia.mime.startsWith("video") ? (
-                      <video src={currentMedia.mediaLocation} controls className="max-h-[300px] rounded-lg object-contain" />
+                      <video src={currentMedia.url} controls className="max-h-[300px] rounded-lg object-contain" />
                     ) : (
-                      <img src={currentMedia.mediaLocation} alt="media" className="max-h-[300px] w-auto rounded-lg object-contain" />
+                      <img src={currentMedia.url} alt="media" className="max-h-[300px] w-auto rounded-lg object-contain" />
                     )}
                     {totalMedia > 1 && (
                       <div className="flex items-center gap-3 mt-3">

@@ -8,7 +8,7 @@ const MAX_BSKY_IMAGE_BYTES = 1_000_000; // ≈ 976.56 KiB
 export const runtime = "nodejs";
 
 const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "https://app.unipost.cl";
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://app.unipost.click";
 
 function buildHashtagFacets(text: string) {
   const facets: any[] = [];
@@ -176,6 +176,7 @@ export async function publishToBlueskyInternal(userId: number, postId: number, v
         const mediaUrl = media.url.startsWith("http")
           ? media.url
           : `${APP_URL}${media.url}`;
+        console.log("🖼️ [Bluesky] mediaUrl =", mediaUrl);
 
         const resImg = await fetch(mediaUrl);
         if (!resImg.ok) {

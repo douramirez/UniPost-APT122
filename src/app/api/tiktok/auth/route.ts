@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
+// ---- Función PKCE necesaria ----
 function base64url(buffer: ArrayBuffer) {
   return Buffer.from(buffer)
     .toString("base64")
@@ -30,34 +31,35 @@ export async function GET() {
     return NextResponse.redirect(new URL("/login", baseUrl));
   }
 
+  // CSRF
   const csrfState = Math.random().toString(36).substring(2);
 
+  // Generar PKCE
   const { code_verifier, code_challenge } = await generatePKCE();
 
-  // Crear respuesta 302 sin URL inicial
-  const response = new NextResponse(null, { status: 302 });
+  // Guardar el code_verifier en cookies o Redis para el callback
+  const response = NextResponse.redirect("");
 
-  // Guardar cookie
   response.cookies.set("tiktok_code_verifier", code_verifier, {
     httpOnly: true,
-    secure: false,
+    secure: true,
     path: "/",
   });
 
-  // Construir la URL TikTok completa
+  // Construir la URL TikTok
   const url = new URL("https://www.tiktok.com/v2/auth/authorize/");
+
   url.searchParams.set("client_key", process.env.TIKTOK_CLIENT_KEY!);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set(
-    "scope",
-    "user.info.basic,user.info.stats,video.upload,video.publish"
-  );
+  url.searchParams.set("scope", "user.info.basic,user.info.stats,video.upload,video.publish");
   url.searchParams.set("redirect_uri", process.env.TIKTOK_REDIRECT_URI!);
   url.searchParams.set("state", csrfState);
+
+  // 🔥 LO QUE TE FALTABA 🔥
   url.searchParams.set("code_challenge", code_challenge);
   url.searchParams.set("code_challenge_method", "S256");
 
-  // Redirigir hacia TikTok
+  // Redirigir al usuario
   response.headers.set("Location", url.toString());
 
   return response;
