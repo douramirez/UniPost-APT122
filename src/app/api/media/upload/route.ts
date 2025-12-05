@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseClient } from "@/lib/supabase";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = createSupabaseClient(); // ← CLIENTE SOLO EN RUNTIME
+
     const formData = await req.formData();
 
     const file = formData.get("file") as File;
